@@ -98,15 +98,15 @@ def train_player_model(player_name):
         mae_scores.append(mean_absolute_error(y_test, y_pred))
         mse_scores.append(mean_squared_error(y_test, y_pred))
 
-        # 🔹 Evita erro de R² NaN verificando a variabilidade de y_test
-        if np.var(y_test) > 0:
+        # 🔹 Evita erro de R² negativo extremo verificando a variabilidade de y_test
+        if np.var(y_test) > 1e-3:  # Se a variabilidade for muito baixa, não calcula o R²
             r2_scores.append(r2_score(y_test, y_pred))
         else:
-            r2_scores.append(None)  # Evita erro dividindo por zero
+            r2_scores.append(None)  # Evita erro dividindo por uma variabilidade quase zero
     
     # 🔹 Remover valores None antes de calcular a média do R²
     r2_scores = [r for r in r2_scores if r is not None]
-    r2_mean = np.mean(r2_scores) if len(r2_scores) > 0 else "Variância muito baixa"
+    r2_mean = np.mean(r2_scores) if len(r2_scores) > 0 else "Variância muito baixa para calcular R²"
 
     # 🔹 Fazer a previsão da próxima temporada
     last_season_df = pd.DataFrame([df.iloc[-1][feature_columns]], columns=feature_columns)  # Mantém os nomes das colunas
