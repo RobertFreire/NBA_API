@@ -26,7 +26,7 @@ def get_team_stats():
     df = df[selected_columns]
 
     # Salvando os dados em CSV
-    save_team_stats_to_csv(df.to_dict(orient='records'))
+    save_team_stats_to_csv(df)
 
     return df.to_dict(orient='records')
 
@@ -48,21 +48,19 @@ def get_player_stats(name):
     df = df[selected_columns]
 
     # Salvando os dados em CSV
-    save_player_stats_to_csv(df.to_dict(orient='records'), name)
+    save_player_stats_to_csv(df, name)
 
     return df.to_dict(orient='records')
 
 # 🔹 Funções para salvar dados em CSV
-def save_team_stats_to_csv(team_stats):
+def save_team_stats_to_csv(df):
     """Salva as estatísticas do time em um arquivo CSV."""
-    df = pd.DataFrame(team_stats)
     file_path = os.path.join(DATA_DIR, "team_stats.csv")
     df.to_csv(file_path, index=False)
     print(f"✅ Dados do time salvos em {file_path}")
 
-def save_player_stats_to_csv(player_stats, player_name):
+def save_player_stats_to_csv(df, player_name):
     """Salva as estatísticas de um jogador em um arquivo CSV."""
-    df = pd.DataFrame(player_stats)
     file_path = os.path.join(DATA_DIR, f"{player_name.replace(' ', '_')}.csv")
     df.to_csv(file_path, index=False)
     print(f"✅ Dados do jogador {player_name} salvos em {file_path}")
