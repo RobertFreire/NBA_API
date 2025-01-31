@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, send_file, render_template
 from app.services import get_team_stats, get_player_stats
 from app.statistics import calculate_team_stats, calculate_player_stats
+from app.ml_model import train_player_model
 from app.graphs import (
     generate_team_graph, generate_player_graph, generate_histogram,
     generate_radar_chart, generate_boxplot, generate_pie_chart, generate_scatter_plot
@@ -8,6 +9,16 @@ from app.graphs import (
 
 # Criando o Blueprint
 main = Blueprint('main', __name__)
+
+@main.route('/player/<name>/predict', methods=['GET'])
+def predict_player_performance(name):
+    """Prevê a pontuação de um jogador na próxima temporada."""
+    prediction = train_player_model(name)
+    
+    if "error" in prediction:
+        return jsonify(prediction), 400
+
+    return jsonify(prediction), 200, {"Content-Type": "application/json; charset=utf-8"}
 
 ### 📊 ENDPOINTS DE ESTATÍSTICAS ###
 @main.route('/team/stats', methods=['GET'])
