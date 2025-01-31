@@ -1,5 +1,8 @@
-from flask import Blueprint, jsonify, send_file
-from app.services import get_team_stats, get_player_stats
+from flask import Blueprint, jsonify, send_file, render_template
+from app.services import (
+    get_team_stats, get_player_stats,
+    save_team_stats_to_csv, save_player_stats_to_csv
+)
 from app.graphs import (
     generate_team_graph, generate_player_graph, generate_histogram,
     generate_radar_chart, generate_boxplot, generate_pie_chart, generate_scatter_plot
@@ -11,8 +14,9 @@ main = Blueprint('main', __name__)
 ### 📊 ENDPOINTS DE ESTATÍSTICAS ###
 @main.route('/team', methods=['GET'])
 def team_stats():
-    """Retorna as estatísticas formatadas do New Orleans Pelicans"""
+    """Retorna as estatísticas formatadas do New Orleans Pelicans e salva em CSV"""
     stats = get_team_stats()
+    save_team_stats_to_csv(stats)  # Salva os dados do time automaticamente em CSV
     return jsonify({
         "team": "New Orleans Pelicans",
         "season": "2023-24",
@@ -21,12 +25,14 @@ def team_stats():
 
 @main.route('/player/<name>', methods=['GET'])
 def player_stats(name):
-    """Retorna as estatísticas formatadas do jogador"""
+    """Retorna as estatísticas formatadas do jogador e salva em CSV"""
     stats = get_player_stats(name)
-    
+
     if "error" in stats:
         return jsonify(stats), 404  # Retorna erro 404 se o jogador não for encontrado
-    
+
+    save_player_stats_to_csv(stats, name)  # Salva os dados do jogador automaticamente em CSV
+
     return jsonify({
         "player": name,
         "stats": stats
@@ -46,7 +52,7 @@ def player_graph(name):
     stats = get_player_stats(name)
     
     if "error" in stats:
-        return jsonify(stats), 404  # Retorna erro 404 se o jogador não for encontrado
+        return jsonify(stats), 404
 
     graph_path = generate_player_graph(stats, name)
     return send_file(graph_path, mimetype='image/png')
@@ -93,3 +99,9 @@ def player_scatter(name):
 
     graph_path = generate_scatter_plot(stats, name)
     return send_file(graph_path, mimetype='image/png')
+
+### 🖥️ ENDPOINT DO DASHBOARD ###
+@main.route('/dashboard', methods=['GET'])
+def dashboard():
+    """Renderiza um dashboard simples com os gráficos"""
+    return render_template("dashboard.html")
