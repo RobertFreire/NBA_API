@@ -10,6 +10,7 @@ instance/
 *.db
 
 # Virtualenv
+.venv
 venv/
 ENV/
 env/
