@@ -1,129 +1,115 @@
-from flask import Blueprint, jsonify, send_file, render_template
-from app.services import get_team_stats, get_player_stats
+from flask import Blueprint, jsonify, render_template
+from app.services import get_team_stats_both_seasons, get_team_stats, get_player_stats
 from app.statistics import calculate_team_stats, calculate_player_stats
 from app.ml_model import train_player_model
 from app.graphs import (
-    generate_team_graph, generate_player_graph, generate_histogram,
-    generate_radar_chart, generate_boxplot, generate_pie_chart, generate_scatter_plot
+    generate_team_graph_data, generate_player_graph_data, generate_histogram_data,
+    generate_radar_chart_data, generate_boxplot_data, generate_pie_chart_data, generate_scatter_plot_data
 )
 
 # Criando o Blueprint
 main = Blueprint('main', __name__)
 
-@main.route('/player/<name>/predict', methods=['GET'])
-def predict_player_performance(name):
-    """Prevê a pontuação de um jogador na próxima temporada."""
-    prediction = train_player_model(name)
+### 📌 RF1.1 - Listar estatísticas do time para `23-24` e `24-25`
+@main.route('/team/stats', methods=['GET'])
+def team_advanced_stats():
+    """Retorna estatísticas do New Orleans Pelicans para `23-24` e `24-25`."""
+    stats = get_team_stats_both_seasons()
+    return jsonify(stats), 200
+
+### 📌 RF1.2 - Estatísticas do time para uma temporada específica
+@main.route('/team/stats/<season>', methods=['GET'])
+def team_stats_season(season):
+    """Retorna estatísticas do New Orleans Pelicans para uma temporada específica."""
+    stats = get_team_stats(season)
+    return jsonify(stats), 200
+
+### 📌 RF2.1 - Estatísticas detalhadas de um jogador por temporada
+@main.route('/player/<int:player_id>/stats', methods=['GET'])
+def player_advanced_stats(player_id):
+    """Retorna estatísticas descritivas do jogador pelo ID."""
+    stats = get_player_stats(player_id)
+    
+    if "error" in stats:
+        return jsonify(stats), 404
+
+    return jsonify(stats), 200
+
+### 📌 RF3.1 - Prever a pontuação de um jogador na próxima temporada
+@main.route('/player/<int:player_id>/predict', methods=['GET'])
+def predict_player_performance(player_id):
+    """Prevê a pontuação de um jogador na próxima temporada usando Machine Learning."""
+    prediction = train_player_model(player_id)
     
     if "error" in prediction:
         return jsonify(prediction), 400
 
-    return jsonify(prediction), 200, {"Content-Type": "application/json; charset=utf-8"}
+    return jsonify(prediction), 200
 
-### 📊 ENDPOINTS DE ESTATÍSTICAS ###
-@main.route('/team/stats', methods=['GET'])
-def team_advanced_stats():
-    """Retorna estatísticas descritivas do time."""
-    stats = calculate_team_stats()
-    return jsonify(stats), 200, {"Content-Type": "application/json; charset=utf-8", "ensure_ascii": "false"}
-
-@main.route('/player/<name>/stats', methods=['GET'])
-def player_advanced_stats(name):
-    """Retorna estatísticas descritivas do jogador."""
-    stats = calculate_player_stats(name)
-    
-    if "error" in stats:
-        return jsonify(stats), 404, {"Content-Type": "application/json; charset=utf-8", "ensure_ascii": "false"}
-
-    return jsonify(stats), 200, {"Content-Type": "application/json; charset=utf-8", "ensure_ascii": "false"}
-
-@main.route('/team', methods=['GET'])
-def team_stats():
-    """Retorna as estatísticas formatadas do New Orleans Pelicans"""
-    stats = get_team_stats()
-    return jsonify({
-        "team": "New Orleans Pelicans",
-        "season": "2023-24",
-        "stats": stats
-    }), 200, {"Content-Type": "application/json; charset=utf-8"}
-
-@main.route('/player/<name>', methods=['GET'])
-def player_stats(name):
-    """Retorna as estatísticas formatadas do jogador"""
-    stats = get_player_stats(name)
-
-    if "error" in stats:
-        return jsonify(stats), 404, {"Content-Type": "application/json; charset=utf-8"}
-
-    return jsonify({
-        "player": name,
-        "stats": stats
-    }), 200, {"Content-Type": "application/json; charset=utf-8"}
-
-### 📈 ENDPOINTS DE GRÁFICOS ###
+### 📌 RF4.1 - Retornar gráficos como JSON (não imagens)
 @main.route('/team/graph', methods=['GET'])
 def team_graph():
-    """Gera e retorna o gráfico de vitórias x derrotas do time"""
+    """Retorna os dados do gráfico de vitórias x derrotas do time em JSON."""
     team_stats = get_team_stats()
-    graph_path = generate_team_graph(team_stats)
-    return send_file(graph_path, mimetype='image/png')
+    graph_data = generate_team_graph_data(team_stats)
+    return jsonify(graph_data), 200
 
-@main.route('/player/<name>/graph', methods=['GET'])
-def player_graph(name):
-    """Gera e retorna o gráfico de evolução de pontos do jogador"""
-    stats = get_player_stats(name)
+@main.route('/player/<int:player_id>/graph', methods=['GET'])
+def player_graph(player_id):
+    """Retorna os dados do gráfico de evolução de pontos do jogador em JSON."""
+    stats = get_player_stats(player_id)
     
     if "error" in stats:
         return jsonify(stats), 404
 
-    graph_path = generate_player_graph(stats, name)
-    return send_file(graph_path, mimetype='image/png')
+    graph_data = generate_player_graph_data(stats)
+    return jsonify(graph_data), 200
 
 @main.route('/team/graph/histogram', methods=['GET'])
 def team_histogram():
-    """Gera e retorna o histograma de vitórias e derrotas do time"""
+    """Retorna os dados do histograma de vitórias e derrotas do time."""
     team_stats = get_team_stats()
-    graph_path = generate_histogram(team_stats)
-    return send_file(graph_path, mimetype='image/png')
+    graph_data = generate_histogram_data(team_stats)
+    return jsonify(graph_data), 200
 
 @main.route('/team/graph/radar', methods=['GET'])
 def team_radar():
-    """Gera e retorna o gráfico de radar do time"""
+    """Retorna os dados do gráfico de radar do time."""
     team_stats = get_team_stats()
-    graph_path = generate_radar_chart(team_stats)
-    return send_file(graph_path, mimetype='image/png')
+    graph_data = generate_radar_chart_data(team_stats)
+    return jsonify(graph_data), 200
 
-@main.route('/player/<name>/graph/boxplot', methods=['GET'])
-def player_boxplot(name):
-    """Gera e retorna o boxplot do jogador"""
-    stats = get_player_stats(name)
+@main.route('/player/<int:player_id>/graph/boxplot', methods=['GET'])
+def player_boxplot(player_id):
+    """Retorna os dados do boxplot do jogador."""
+    stats = get_player_stats(player_id)
     
     if "error" in stats:
         return jsonify(stats), 404
 
-    graph_path = generate_boxplot(stats, name)
-    return send_file(graph_path, mimetype='image/png')
+    graph_data = generate_boxplot_data(stats)
+    return jsonify(graph_data), 200
 
 @main.route('/team/graph/pie', methods=['GET'])
 def team_pie_chart():
-    """Gera e retorna o gráfico de pizza do time"""
+    """Retorna os dados do gráfico de pizza do time."""
     team_stats = get_team_stats()
-    graph_path = generate_pie_chart(team_stats)
-    return send_file(graph_path, mimetype='image/png')
+    graph_data = generate_pie_chart_data(team_stats)
+    return jsonify(graph_data), 200
 
-@main.route('/player/<name>/graph/scatter', methods=['GET'])
-def player_scatter(name):
-    """Gera e retorna o gráfico de dispersão do jogador"""
-    stats = get_player_stats(name)
+@main.route('/player/<int:player_id>/graph/scatter', methods=['GET'])
+def player_scatter(player_id):
+    """Retorna os dados do gráfico de dispersão do jogador."""
+    stats = get_player_stats(player_id)
     
     if "error" in stats:
         return jsonify(stats), 404
 
-    graph_path = generate_scatter_plot(stats, name)
-    return send_file(graph_path, mimetype='image/png')
+    graph_data = generate_scatter_plot_data(stats)
+    return jsonify(graph_data), 200
 
-### 🖥️ ENDPOINT DO DASHBOARD ###
+### 📌 RF10.1 - Criar Dashboard interativo com gráficos e estatísticas
 @main.route('/dashboard', methods=['GET'])
 def dashboard():
-    """Renderiza um dashboard simples com os gráficos"""
+    """Renderiza um dashboard interativo com gráficos e estatísticas do time e dos jogadores."""
     return render_template("dashboard.html")

@@ -1,66 +1,48 @@
-from nba_api.stats.static import teams, players
-from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, PlayerCareerStats
+from nba_api.stats.static import teams
+from nba_api.stats.endpoints import TeamDashboardByGeneralSplits
 import pandas as pd
 import os
 
-# Diretório onde os CSVs serão armazenados
 DATA_DIR = os.path.join(os.getcwd(), "data")
-os.makedirs(DATA_DIR, exist_ok=True)  # Criando o diretório caso não exista
+os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
 
-# 🔹 Obtendo ID do New Orleans Pelicans
 def get_pelicans_id():
     """Retorna o ID do New Orleans Pelicans."""
     nba_teams = teams.get_teams()
     pelicans = next(team for team in nba_teams if team['full_name'] == 'New Orleans Pelicans')
     return pelicans['id']
 
-# 🔹 Obtendo Estatísticas do Time e Salvando em CSV
-def get_team_stats():
-    """Obtém as estatísticas do New Orleans Pelicans e salva em CSV."""
+def get_team_stats(season="2023-24"):
+    """Obtém estatísticas do New Orleans Pelicans para uma temporada específica."""
     team_id = get_pelicans_id()
-    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season='2023-24')
+    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
     df = team_stats.get_data_frames()[0]
 
-    # Selecionando colunas importantes
-    selected_columns = ["GP", "W", "L", "W_PCT", "PTS", "REB", "AST", "STL", "BLK"]
-    df = df[selected_columns]
+    selected_columns = {
+        "GP": "Jogos",
+        "W": "Vitórias",
+        "L": "Derrotas",
+        "W_PCT": "Porcentagem de Vitórias",
+        "PTS": "Pontos Totais",
+        "REB": "Rebotes",
+        "AST": "Assistências",
+        "STL": "Roubos de Bola",
+        "BLK": "Tocos"
+    }
+    
+    df = df[list(selected_columns.keys())]
+    df.rename(columns=selected_columns, inplace=True)
 
-    # Salvando os dados em CSV
-    save_team_stats_to_csv(df)
+    return {
+        "team_id": team_id,
+        "team_name": "New Orleans Pelicans",
+        "season": season,
+        "stats": df.to_dict(orient="records")
+    }
 
-    return df.to_dict(orient='records')
-
-# 🔹 Obtendo Estatísticas do Jogador e Salvando em CSV
-def get_player_stats(name):
-    """Obtém estatísticas do jogador pelo nome e salva em CSV."""
-    nba_players = players.get_players()
-    player = next((p for p in nba_players if p['full_name'] == name), None)
-
-    if not player:
-        return {"error": "Player not found"}
-
-    player_id = player['id']
-    player_stats = PlayerCareerStats(player_id=player_id)
-    df = player_stats.get_data_frames()[0]
-
-    # Selecionando colunas importantes
-    selected_columns = ["SEASON_ID", "TEAM_ABBREVIATION", "GP", "PTS", "REB", "AST", "FG_PCT", "FG3_PCT", "FT_PCT"]
-    df = df[selected_columns]
-
-    # Salvando os dados em CSV
-    save_player_stats_to_csv(df, name)
-
-    return df.to_dict(orient='records')
-
-# 🔹 Funções para salvar dados em CSV
-def save_team_stats_to_csv(df):
-    """Salva as estatísticas do time em um arquivo CSV."""
-    file_path = os.path.join(DATA_DIR, "team_stats.csv")
-    df.to_csv(file_path, index=False)
-    print(f"✅ Dados do time salvos em {file_path}")
-
-def save_player_stats_to_csv(df, player_name):
-    """Salva as estatísticas de um jogador em um arquivo CSV."""
-    file_path = os.path.join(DATA_DIR, f"{player_name.replace(' ', '_')}.csv")
-    df.to_csv(file_path, index=False)
-    print(f"✅ Dados do jogador {player_name} salvos em {file_path}")
+def get_team_stats_both_seasons():
+    """Retorna estatísticas do New Orleans Pelicans para as temporadas `23-24` e `24-25`."""
+    return {
+        "2023-24": get_team_stats("2023-24"),
+        "2024-25": get_team_stats("2024-25")
+    }
