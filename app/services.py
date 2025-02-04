@@ -8,18 +8,37 @@ os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
 
 ### 🔹 RF1 - LISTA DE TIMES POR CONFERÊNCIA ###
 def get_teams_by_conference():
-    """Retorna uma lista de times da NBA agrupados por conferência."""
+    """Lista os times da NBA agrupados por Conferência Leste e Oeste."""
     nba_teams = teams.get_teams()
-    
-    teams_by_conf = {"Conferência Leste": [], "Conferência Oeste": []}
-    
-    for team in nba_teams:
-        if team["conference"] == "East":
-            teams_by_conf["Conferência Leste"].append({"id": team["id"], "nome": team["full_name"]})
-        else:
-            teams_by_conf["Conferência Oeste"].append({"id": team["id"], "nome": team["full_name"]})
 
-    return teams_by_conf
+    # Dicionário com a divisão correta das conferências
+    eastern_conference = [
+        "Boston Celtics", "Brooklyn Nets", "New York Knicks", "Philadelphia 76ers", "Toronto Raptors",
+        "Chicago Bulls", "Cleveland Cavaliers", "Detroit Pistons", "Indiana Pacers", "Milwaukee Bucks",
+        "Atlanta Hawks", "Charlotte Hornets", "Miami Heat", "Orlando Magic", "Washington Wizards"
+    ]
+    
+    western_conference = [
+        "Denver Nuggets", "Minnesota Timberwolves", "Oklahoma City Thunder", "Portland Trail Blazers", "Utah Jazz",
+        "Golden State Warriors", "Los Angeles Clippers", "Los Angeles Lakers", "Phoenix Suns", "Sacramento Kings",
+        "Dallas Mavericks", "Houston Rockets", "Memphis Grizzlies", "New Orleans Pelicans", "San Antonio Spurs"
+    ]
+
+    east_teams = []
+    west_teams = []
+
+    for team in nba_teams:
+        team_info = {"id": team["id"], "name": team["full_name"]}
+
+        if team["full_name"] in eastern_conference:
+            east_teams.append(team_info)
+        elif team["full_name"] in western_conference:
+            west_teams.append(team_info)
+
+    return {
+        "Conferência Leste": east_teams,
+        "Conferência Oeste": west_teams
+    }
 
 ### 🔹 RF2 - CLASSIFICAÇÃO ATUAL DOS TIMES ###
 def get_team_rankings():

@@ -10,7 +10,7 @@ main = Blueprint('main', __name__)
 ### 📌 RF1 - Listar todos os times da NBA agrupados por conferência
 @main.route('/teams', methods=['GET'])
 def list_teams():
-    """Retorna todos os times da NBA agrupados por conferência."""
+    """Retorna a lista de times da NBA agrupados por conferência."""
     teams = get_teams_by_conference()
     return jsonify(teams), 200
 
