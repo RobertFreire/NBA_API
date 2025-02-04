@@ -10,6 +10,60 @@ from flask import Response
 DATA_DIR = os.path.join(os.getcwd(), "data")
 os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
 
+def save_to_csv(data, filename):
+    """Salva um dicionário ou lista de dicionários em CSV."""
+    file_path = os.path.join(DATA_DIR, f"{filename}.csv")
+    
+    # Se os dados forem uma lista de dicionários
+    if isinstance(data, list):
+        df = pd.DataFrame(data)
+    # Se os dados forem um único dicionário, colocamos em uma lista
+    elif isinstance(data, dict):
+        df = pd.DataFrame([data])
+    else:
+        print(f"Erro ao salvar {filename}: formato inválido")
+        return
+    
+    df.to_csv(file_path, index=False)
+    print(f"✅ Dados salvos em {file_path}")
+
+def save_team_stats_to_csv(team_id, season="2023-24"):
+    """Obtém e salva as estatísticas do time em CSV."""
+    stats = get_team_general_stats(team_id, season)
+    save_to_csv(stats, f"team_stats_{season}")
+
+def save_team_games_to_csv(team_id, season="2023-24"):
+    """Obtém e salva a lista de jogos do time em CSV."""
+    games = get_team_games(team_id, season)["games"]
+    save_to_csv(games, f"team_games_{season}")
+
+def save_defensive_stats_to_csv(team_id, season="2023-24"):
+    """Obtém e salva as estatísticas defensivas do time em CSV."""
+    stats = get_team_defensive_stats(team_id, season)
+    save_to_csv(stats, f"team_defensive_stats_{season}")
+
+def save_offensive_stats_to_csv(team_id, season="2023-24"):
+    """Obtém e salva as estatísticas ofensivas do time em CSV."""
+    stats = get_team_divided_stats(team_id, season)
+    save_to_csv(stats, f"team_offensive_stats_{season}")
+
+def save_graph_data_to_csv(team_id, season="2023-24"):
+    """Obtém e salva os dados dos gráficos do time em CSV."""
+    graphs = {
+        "bar_win_loss": get_bar_chart_win_loss(team_id, season),
+        "bar_home_away": get_bar_chart_home_away(team_id, season),
+        "histogram_win_loss": get_histogram_win_loss(team_id, season),
+        "pie_win_loss": get_pie_chart_win_loss(team_id, season),
+        "radar_points": get_radar_chart_points(team_id, season),
+        "line_win_streak": get_line_chart_win_streak(team_id, season),
+        "scatter_points": get_scatter_chart_points(team_id, season),
+    }
+    
+    for key, data in graphs.items():
+        save_to_csv(data, f"graph_{key}_{season}")
+
+
+
 ### 🔹 RF1 - LISTA DE TIMES POR CONFERÊNCIA ###
 def get_teams_by_conference():
     """Lista os times da NBA agrupados por Conferência Leste e Oeste."""

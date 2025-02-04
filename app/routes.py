@@ -5,7 +5,10 @@ from app.services import (
     get_team_divided_stats, 
     get_team_defensive_stats, get_team_games, 
     get_bar_chart_win_loss, get_pie_chart_win_loss, 
-    get_radar_chart_points
+    get_radar_chart_points, save_team_stats_to_csv,
+    save_team_games_to_csv, save_defensive_stats_to_csv,
+    save_offensive_stats_to_csv, save_graph_data_to_csv
+
 )
 
 
@@ -78,5 +81,18 @@ def graph_radar_points(team_id):
     """Retorna os dados para um gráfico de radar de pontos marcados e sofridos."""
     return jsonify(get_radar_chart_points(team_id)), 200
 
+### rf9
+@main.route('/team/<int:team_id>/save_all', methods=['GET'])
+def save_all_data(team_id):
+    """Salva todas as estatísticas do time em CSV."""
+    season = "2023-24"
+    
+    save_team_stats_to_csv(team_id, season)
+    save_team_games_to_csv(team_id, season)
+    save_defensive_stats_to_csv(team_id, season)
+    save_offensive_stats_to_csv(team_id, season)
+    save_graph_data_to_csv(team_id, season)
+    
+    return jsonify({"message": f"Todos os dados do time {team_id} foram salvos com sucesso!"}), 200
 
 
