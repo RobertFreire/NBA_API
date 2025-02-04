@@ -65,49 +65,6 @@ def player_graph(player_id):
     graph_data = generate_player_graph_data(stats)
     return jsonify(graph_data), 200
 
-@main.route('/team/graph/histogram', methods=['GET'])
-def team_histogram():
-    """Retorna os dados do histograma de vitórias e derrotas do time."""
-    team_stats = get_team_stats()
-    graph_data = generate_histogram_data(team_stats)
-    return jsonify(graph_data), 200
-
-@main.route('/team/graph/radar', methods=['GET'])
-def team_radar():
-    """Retorna os dados do gráfico de radar do time."""
-    team_stats = get_team_stats()
-    graph_data = generate_radar_chart_data(team_stats)
-    return jsonify(graph_data), 200
-
-@main.route('/player/<int:player_id>/graph/boxplot', methods=['GET'])
-def player_boxplot(player_id):
-    """Retorna os dados do boxplot do jogador."""
-    stats = get_player_stats(player_id)
-    
-    if "error" in stats:
-        return jsonify(stats), 404
-
-    graph_data = generate_boxplot_data(stats)
-    return jsonify(graph_data), 200
-
-@main.route('/team/graph/pie', methods=['GET'])
-def team_pie_chart():
-    """Retorna os dados do gráfico de pizza do time."""
-    team_stats = get_team_stats()
-    graph_data = generate_pie_chart_data(team_stats)
-    return jsonify(graph_data), 200
-
-@main.route('/player/<int:player_id>/graph/scatter', methods=['GET'])
-def player_scatter(player_id):
-    """Retorna os dados do gráfico de dispersão do jogador."""
-    stats = get_player_stats(player_id)
-    
-    if "error" in stats:
-        return jsonify(stats), 404
-
-    graph_data = generate_scatter_plot_data(stats)
-    return jsonify(graph_data), 200
-
 ### 📌 RF10.1 - Criar Dashboard interativo com gráficos e estatísticas
 @main.route('/dashboard', methods=['GET'])
 def dashboard():
