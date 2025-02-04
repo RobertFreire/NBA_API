@@ -2,10 +2,6 @@ from flask import Blueprint, jsonify, render_template
 from app.services import get_team_stats_both_seasons, get_team_stats, get_player_stats
 from app.statistics import calculate_team_stats, calculate_player_stats
 from app.ml_model import train_player_model
-from app.graphs import (
-    generate_team_graph_data, generate_player_graph_data, generate_histogram_data,
-    generate_radar_chart_data, generate_boxplot_data, generate_pie_chart_data, generate_scatter_plot_data
-)
 
 # Criando o Blueprint
 main = Blueprint('main', __name__)
@@ -45,25 +41,6 @@ def predict_player_performance(player_id):
         return jsonify(prediction), 400
 
     return jsonify(prediction), 200
-
-### 📌 RF4.1 - Retornar gráficos como JSON (não imagens)
-@main.route('/team/graph', methods=['GET'])
-def team_graph():
-    """Retorna os dados do gráfico de vitórias x derrotas do time em JSON."""
-    team_stats = get_team_stats()
-    graph_data = generate_team_graph_data(team_stats)
-    return jsonify(graph_data), 200
-
-@main.route('/player/<int:player_id>/graph', methods=['GET'])
-def player_graph(player_id):
-    """Retorna os dados do gráfico de evolução de pontos do jogador em JSON."""
-    stats = get_player_stats(player_id)
-    
-    if "error" in stats:
-        return jsonify(stats), 404
-
-    graph_data = generate_player_graph_data(stats)
-    return jsonify(graph_data), 200
 
 ### 📌 RF10.1 - Criar Dashboard interativo com gráficos e estatísticas
 @main.route('/dashboard', methods=['GET'])
