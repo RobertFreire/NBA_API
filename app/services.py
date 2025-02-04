@@ -1,5 +1,6 @@
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings
+from nba_api.stats.endpoints import TeamGameLog
 import pandas as pd
 import os
 import numpy as np
@@ -238,6 +239,43 @@ def get_team_defensive_stats(team_id, season="2023-24"):
             "Total de Erros por Jogo": int(df["Total de Erros por Jogo"].iloc[0]),
             "Total de Faltas por Jogo": int(df["Total de Faltas por Jogo"].iloc[0])
         }
+    }
+
+    return response_data
+
+## rf7
+def get_team_games(team_id, season="2023-24"):
+    """Obtém a lista de jogos do time na temporada especificada."""
+    team_games = TeamGameLog(team_id=team_id, season=season)
+    df = team_games.get_data_frames()[0]  # Pegamos os dados de jogos
+
+    # 🔹 Debug: Listar colunas disponíveis para depuração
+    print("📊 Colunas disponíveis no DataFrame:", df.columns.tolist())
+
+    # 🔹 Selecionando as colunas necessárias (verificamos se cada uma existe)
+    selected_columns = {
+        "GAME_DATE": "Data do Jogo",
+        "MATCHUP": "Adversário",
+        "WL": "Vitória ou Derrota",
+        "PTS": "Pontos do Time"
+    }
+
+    # 🔹 Se a coluna PLUS_MINUS existir, adicionamos ela
+    if "PLUS_MINUS" in df.columns:
+        selected_columns["PLUS_MINUS"] = "Saldo de Pontos"
+
+    # 🔹 Filtramos apenas as colunas existentes
+    existing_columns = [col for col in selected_columns.keys() if col in df.columns]
+    df = df[existing_columns].rename(columns={col: selected_columns[col] for col in existing_columns})
+
+    # 🔹 Transformar a coluna "Adversário" para indicar se o jogo foi em casa ou fora
+    df["Casa ou Fora"] = df["Adversário"].apply(lambda x: "Casa" if "vs." in x else "Fora")
+    df["Adversário"] = df["Adversário"].apply(lambda x: x.split()[-1])
+
+    response_data = {
+        "team_id": int(team_id),
+        "season": season,
+        "games": df.to_dict(orient="records")
     }
 
     return response_data

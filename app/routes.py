@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify
 from app.services import (
     get_teams_by_conference, get_team_rankings,
     get_team_results, get_team_divided_stats, 
-    get_team_defensive_stats
+    get_team_defensive_stats, get_team_games
 )
 
 
@@ -27,7 +27,7 @@ def team_ranking():
 @main.route('/team/<int:team_id>/results', methods=['GET'])
 def team_results(team_id):
     """Retorna os resultados de vitórias e derrotas do time."""
-    return get_team_results(team_id)  # Retorna diretamente o Response
+    return get_team_results(team_id) 
 
 ### rf4
 @main.route('/team/<int:team_id>/general_stats', methods=['GET'])
@@ -50,5 +50,13 @@ def team_defensive_stats(team_id):
     """Retorna as estatísticas defensivas do time para a temporada."""
     stats = get_team_defensive_stats(team_id)
     return jsonify(stats), 200
+
+### rf7
+@main.route('/team/<int:team_id>/games', methods=['GET'])
+def team_games(team_id):
+    """Retorna a lista de jogos do time para a temporada."""
+    games = get_team_games(team_id)
+    return jsonify(games), 200
+
 
 
