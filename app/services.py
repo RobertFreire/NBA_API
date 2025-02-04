@@ -124,29 +124,49 @@ def get_team_results(team_id, season="2023-24"):
     return Response(orjson.dumps(response_data), mimetype="application/json")
 
 
-### 🔹 RF4, RF5, RF6 - ESTATÍSTICAS GERAIS E DEFENSIVAS ###
-def get_team_advanced_stats(team_id, season="2023-24"):
-    """Obtém estatísticas avançadas do time para a temporada."""
+#rf4
+
+def get_team_general_stats(team_id, season="2023-24"):
+    """Obtém estatísticas gerais do time para a temporada."""
     team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-    df = team_stats.get_data_frames()[0]  # Índice 0 contém estatísticas gerais
+    df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
 
     selected_columns = {
         "PTS": "Total de Pontos por Jogo",
         "AST": "Total de Assistências por Jogo",
         "REB": "Total de Rebotes por Jogo",
-        "FG3M": "Total de Cestas de 3 Pontos Convertidas",
-        "REB_O": "Total de Rebotes Ofensivos",
-        "REB_D": "Total de Rebotes Defensivos",
-        "BLK": "Total de Tocos por Jogo",
-        "TOV": "Total de Erros por Jogo",
-        "PF": "Total de Faltas por Jogo"
+        "FG3M": "Total de Cestas de 3 Pontos Convertidas"
     }
 
-    df = df[list(selected_columns.keys())]
+    # Filtrar e renomear colunas
+    df = df[list(selected_columns.keys()) + ["GP"]]
     df.rename(columns=selected_columns, inplace=True)
 
-    return {
-        "team_id": team_id,
+    # Número de jogos
+    total_jogos = int(df["GP"].iloc[0])
+
+    # Obtendo estatísticas de casa e fora
+    location_df = team_stats.get_data_frames()[1]
+    home_stats = location_df[location_df["TEAM_GAME_LOCATION"] == "Home"].iloc[0]
+    away_stats = location_df[location_df["TEAM_GAME_LOCATION"] == "Road"].iloc[0]
+
+    response_data = {
+        "team_id": int(team_id),
         "season": season,
-        "stats": df.to_dict(orient="records")
+        "stats": {
+            "Total de Pontos por Jogo": round(float(df["Total de Pontos por Jogo"].iloc[0]) / total_jogos, 2),
+            "Total de Assistências por Jogo": round(float(df["Total de Assistências por Jogo"].iloc[0]) / total_jogos, 2),
+            "Total de Rebotes por Jogo": round(float(df["Total de Rebotes por Jogo"].iloc[0]) / total_jogos, 2),
+            "Total de Cestas de 3 Pontos Convertidas": int(df["Total de Cestas de 3 Pontos Convertidas"].iloc[0]),
+            "Derrotas em Casa": int(home_stats["L"]),
+            "Derrotas Fora de Casa": int(away_stats["L"])
+        }
     }
+
+    # 🔹 Converte todos os valores NumPy para tipos serializáveis
+    response_data = convert_numpy_types(response_data)
+
+    return response_data
+
+
+
