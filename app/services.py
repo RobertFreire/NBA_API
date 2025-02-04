@@ -27,40 +27,40 @@ def save_to_csv(data, filename):
     df.to_csv(file_path, index=False)
     print(f"✅ Dados salvos em {file_path}")
 
-def save_team_stats_to_csv(team_id, season="2023-24"):
+def save_team_stats_to_csv(team_id):
     """Obtém e salva as estatísticas do time em CSV."""
-    stats = get_team_general_stats(team_id, season)
-    save_to_csv(stats, f"team_stats_{season}")
+    stats = get_team_general_stats(team_id)
+    save_to_csv(stats, f"team_stats_{team_id}")
 
-def save_team_games_to_csv(team_id, season="2023-24"):
+def save_team_games_to_csv(team_id):
     """Obtém e salva a lista de jogos do time em CSV."""
-    games = get_team_games(team_id, season)["games"]
-    save_to_csv(games, f"team_games_{season}")
+    games = get_team_games(team_id)["games"]
+    save_to_csv(games, f"team_games_{team_id}")
 
-def save_defensive_stats_to_csv(team_id, season="2023-24"):
+def save_defensive_stats_to_csv(team_id):
     """Obtém e salva as estatísticas defensivas do time em CSV."""
-    stats = get_team_defensive_stats(team_id, season)
-    save_to_csv(stats, f"team_defensive_stats_{season}")
+    stats = get_team_defensive_stats(team_id)
+    save_to_csv(stats, f"team_defensive_stats_{team_id}")
 
-def save_offensive_stats_to_csv(team_id, season="2023-24"):
+def save_offensive_stats_to_csv(team_id):
     """Obtém e salva as estatísticas ofensivas do time em CSV."""
-    stats = get_team_divided_stats(team_id, season)
-    save_to_csv(stats, f"team_offensive_stats_{season}")
+    stats = get_team_divided_stats(team_id)
+    save_to_csv(stats, f"team_offensive_stats_{team_id}")
 
-def save_graph_data_to_csv(team_id, season="2023-24"):
+def save_graph_data_to_csv(team_id):
     """Obtém e salva os dados dos gráficos do time em CSV."""
     graphs = {
-        "bar_win_loss": get_bar_chart_win_loss(team_id, season),
-        "bar_home_away": get_bar_chart_home_away(team_id, season),
-        "histogram_win_loss": get_histogram_win_loss(team_id, season),
-        "pie_win_loss": get_pie_chart_win_loss(team_id, season),
-        "radar_points": get_radar_chart_points(team_id, season),
-        "line_win_streak": get_line_chart_win_streak(team_id, season),
-        "scatter_points": get_scatter_chart_points(team_id, season),
+        "bar_win_loss": get_bar_chart_win_loss(team_id),
+        "bar_home_away": get_bar_chart_home_away(team_id),
+        "histogram_win_loss": get_histogram_win_loss(team_id),
+        "pie_win_loss": get_pie_chart_win_loss(team_id),
+        "radar_points": get_radar_chart_points(team_id),
+        "line_win_streak": get_line_chart_win_streak(team_id),
+        "scatter_points": get_scatter_chart_points(team_id),
     }
     
     for key, data in graphs.items():
-        save_to_csv(data, f"graph_{key}_{season}")
+        save_to_csv(data, f"graph_{key}_{team_id}")
 
 def get_team_stats_both_seasons(team_id):
     """Obtém estatísticas do time para as temporadas 23-24 e a atual (24-25)."""
@@ -202,8 +202,17 @@ def get_team_results_both_seasons(team_id):
 def get_team_general_stats(team_id, season="2023-24"):
     """Obtém estatísticas gerais do time para a temporada."""
     team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-    df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
+    data_frames = team_stats.get_data_frames()
+    
+    # Imprimir os dados para verificar a resposta
+    print("Resposta da API:", data_frames)
 
+    # Certificar-se de que 'resultSet' ou o esperado está presente
+    if len(data_frames) == 0:
+        return {"error": "Nenhum dado encontrado para o time."}
+    
+    # Continuar com a lógica original se a resposta estiver correta
+    df = data_frames[0]
     selected_columns = {
         "PTS": "Total de Pontos por Jogo",
         "AST": "Total de Assistências por Jogo",
@@ -236,121 +245,135 @@ def get_team_general_stats(team_id, season="2023-24"):
         }
     }
 
-    # 🔹 Converte todos os valores NumPy para tipos serializáveis
+    # Converte todos os valores NumPy para tipos serializáveis
     response_data = convert_numpy_types(response_data)
 
     return response_data
 
+
+
 ##rf5
 
-def get_team_divided_stats(team_id, season="2023-24"):
-    """Obtém a divisão de estatísticas de rebotes, pontos e arremessos do time na temporada."""
-    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-    df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
+def get_team_divided_stats(team_id):
+    """Obtém a divisão de estatísticas de rebotes, pontos e arremessos do time para as temporadas 2023-24 e 2024-25."""
+    seasons = ["2023-24", "2024-25"]
+    stats = {}
 
-    selected_columns = {
-        "REB": "Total de Rebotes",
-        "OREB": "Total de Rebotes Ofensivos",
-        "DREB": "Total de Rebotes Defensivos",
-        "PTS": "Total de Pontos",
-        "FGM": "Total de Cestas Convertidas",
-        "FG3M": "Total de Cestas de 3 Pontos",
-        "FTM": "Total de Lances Livres Convertidos"
-    }
+    for season in seasons:
+        team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
+        df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
 
-    # Filtrar e renomear colunas
-    df = df[list(selected_columns.keys())]
-    df.rename(columns=selected_columns, inplace=True)
-
-    # 🔹 Calculando as cestas de 2 pontos
-    total_cestas_convertidas = df["Total de Cestas Convertidas"].iloc[0]
-    total_cestas_3_pontos = df["Total de Cestas de 3 Pontos"].iloc[0]
-    total_cestas_2_pontos = total_cestas_convertidas - total_cestas_3_pontos  # Cestas de 2P = Total - 3P
-
-    response_data = {
-        "team_id": int(team_id),
-        "season": season,
-        "stats": {
-            "Total de Rebotes": int(df["Total de Rebotes"].iloc[0]),
-            "Total de Rebotes Ofensivos": int(df["Total de Rebotes Ofensivos"].iloc[0]),
-            "Total de Rebotes Defensivos": int(df["Total de Rebotes Defensivos"].iloc[0]),
-            "Total de Pontos": int(df["Total de Pontos"].iloc[0]),
-            "Total de Cestas de 2 Pontos": int(total_cestas_2_pontos),
-            "Total de Cestas de 3 Pontos": int(df["Total de Cestas de 3 Pontos"].iloc[0]),
-            "Total de Lances Livres Convertidos": int(df["Total de Lances Livres Convertidos"].iloc[0])
+        selected_columns = {
+            "REB": "Total de Rebotes",
+            "OREB": "Total de Rebotes Ofensivos",
+            "DREB": "Total de Rebotes Defensivos",
+            "PTS": "Total de Pontos",
+            "FGM": "Total de Cestas Convertidas",
+            "FG3M": "Total de Cestas de 3 Pontos",
+            "FTM": "Total de Lances Livres Convertidos"
         }
-    }
 
-    return response_data
+        df = df[list(selected_columns.keys())]
+        df.rename(columns=selected_columns, inplace=True)
+
+        # Calculando as cestas de 2 pontos
+        total_cestas_convertidas = df["Total de Cestas Convertidas"].iloc[0]
+        total_cestas_3_pontos = df["Total de Cestas de 3 Pontos"].iloc[0]
+        total_cestas_2_pontos = total_cestas_convertidas - total_cestas_3_pontos  # Cestas de 2P = Total - 3P
+
+        stats[season] = {
+            "team_id": int(team_id),
+            "season": season,
+            "stats": {
+                "Total de Rebotes": int(df["Total de Rebotes"].iloc[0]),
+                "Total de Rebotes Ofensivos": int(df["Total de Rebotes Ofensivos"].iloc[0]),
+                "Total de Rebotes Defensivos": int(df["Total de Rebotes Defensivos"].iloc[0]),
+                "Total de Pontos": int(df["Total de Pontos"].iloc[0]),
+                "Total de Cestas de 2 Pontos": int(total_cestas_2_pontos),
+                "Total de Cestas de 3 Pontos": int(df["Total de Cestas de 3 Pontos"].iloc[0]),
+                "Total de Lances Livres Convertidos": int(df["Total de Lances Livres Convertidos"].iloc[0])
+            }
+        }
+
+    return stats
+
 
 ## rf6
-def get_team_defensive_stats(team_id, season="2023-24"):
-    """Obtém estatísticas defensivas do time para a temporada."""
-    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-    df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
+def get_team_defensive_stats(team_id):
+    """Obtém estatísticas defensivas do time para as temporadas 2023-24 e 2024-25."""
+    seasons = ["2023-24", "2024-25"]
+    stats = {}
+    
+    for season in seasons:
+        team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
+        df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
 
-    selected_columns = {
-        "STL": "Total de Roubos de Bola",
-        "DREB": "Total de Rebotes Defensivos",
-        "BLK": "Total de Tocos por Jogo",
-        "TOV": "Total de Erros por Jogo",
-        "PF": "Total de Faltas por Jogo"
-    }
-
-    # Filtrar e renomear colunas
-    df = df[list(selected_columns.keys())]
-    df.rename(columns=selected_columns, inplace=True)
-
-    response_data = {
-        "team_id": int(team_id),
-        "season": season,
-        "stats": {
-            "Total de Roubos de Bola": int(df["Total de Roubos de Bola"].iloc[0]),
-            "Total de Rebotes Defensivos": int(df["Total de Rebotes Defensivos"].iloc[0]),
-            "Total de Tocos por Jogo": int(df["Total de Tocos por Jogo"].iloc[0]),
-            "Total de Erros por Jogo": int(df["Total de Erros por Jogo"].iloc[0]),
-            "Total de Faltas por Jogo": int(df["Total de Faltas por Jogo"].iloc[0])
+        selected_columns = {
+            "STL": "Total de Roubos de Bola",
+            "DREB": "Total de Rebotes Defensivos",
+            "BLK": "Total de Tocos por Jogo",
+            "TOV": "Total de Erros por Jogo",
+            "PF": "Total de Faltas por Jogo"
         }
-    }
 
-    return response_data
+        # Filtrar e renomear colunas
+        df = df[list(selected_columns.keys())]
+        df.rename(columns=selected_columns, inplace=True)
+
+        stats[season] = {
+            "team_id": int(team_id),
+            "season": season,
+            "stats": {
+                "Total de Roubos de Bola": int(df["Total de Roubos de Bola"].iloc[0]),
+                "Total de Rebotes Defensivos": int(df["Total de Rebotes Defensivos"].iloc[0]),
+                "Total de Tocos por Jogo": int(df["Total de Tocos por Jogo"].iloc[0]),
+                "Total de Erros por Jogo": int(df["Total de Erros por Jogo"].iloc[0]),
+                "Total de Faltas por Jogo": int(df["Total de Faltas por Jogo"].iloc[0])
+            }
+        }
+
+    return stats
+
 
 ## rf7
-def get_team_games(team_id, season="2023-24"):
-    """Obtém a lista de jogos do time na temporada especificada."""
-    team_games = TeamGameLog(team_id=team_id, season=season)
-    df = team_games.get_data_frames()[0]  # Pegamos os dados de jogos
+def get_team_games(team_id, season=None):
+    """Obtém a lista de jogos do time para as temporadas 2023-24 e 2024-25."""
+    seasons = ["2023-24", "2024-25"]
+    games = {}
+    
+    for season in seasons:
+        team_games = TeamGameLog(team_id=team_id, season=season)
+        df = team_games.get_data_frames()[0]  # Pegamos os dados de jogos
 
-    # 🔹 Debug: Listar colunas disponíveis para depuração
-    print("📊 Colunas disponíveis no DataFrame:", df.columns.tolist())
+        selected_columns = {
+            "GAME_DATE": "Data do Jogo",
+            "MATCHUP": "Adversário",
+            "WL": "Vitória ou Derrota",
+            "PTS": "Pontos do Time"
+        }
 
-    # 🔹 Selecionando as colunas necessárias (verificamos se cada uma existe)
-    selected_columns = {
-        "GAME_DATE": "Data do Jogo",
-        "MATCHUP": "Adversário",
-        "WL": "Vitória ou Derrota",
-        "PTS": "Pontos do Time"
-    }
+        # Se a coluna PLUS_MINUS existir, adicionamos ela
+        if "PLUS_MINUS" in df.columns:
+            selected_columns["PLUS_MINUS"] = "Saldo de Pontos"
 
-    # 🔹 Se a coluna PLUS_MINUS existir, adicionamos ela
-    if "PLUS_MINUS" in df.columns:
-        selected_columns["PLUS_MINUS"] = "Saldo de Pontos"
+        # Filtramos apenas as colunas existentes
+        existing_columns = [col for col in selected_columns.keys() if col in df.columns]
+        df = df[existing_columns].rename(columns={col: selected_columns[col] for col in existing_columns})
 
-    # 🔹 Filtramos apenas as colunas existentes
-    existing_columns = [col for col in selected_columns.keys() if col in df.columns]
-    df = df[existing_columns].rename(columns={col: selected_columns[col] for col in existing_columns})
+        # Transformar a coluna "Adversário" para indicar se o jogo foi em casa ou fora
+        df["Casa ou Fora"] = df["Adversário"].apply(lambda x: "Casa" if "vs." in x else "Fora")
+        df["Adversário"] = df["Adversário"].apply(lambda x: x.split()[-1])
 
-    # 🔹 Transformar a coluna "Adversário" para indicar se o jogo foi em casa ou fora
-    df["Casa ou Fora"] = df["Adversário"].apply(lambda x: "Casa" if "vs." in x else "Fora")
-    df["Adversário"] = df["Adversário"].apply(lambda x: x.split()[-1])
+        # Armazenar os jogos de cada temporada
+        games[season] = {
+            "team_id": int(team_id),
+            "season": season,
+            "games": df.to_dict(orient="records")
+        }
 
-    response_data = {
-        "team_id": int(team_id),
-        "season": season,
-        "games": df.to_dict(orient="records")
-    }
+    return games
 
-    return response_data
+
 
 ## rf8
 def get_bar_chart_win_loss(team_id, season="2023-24"):

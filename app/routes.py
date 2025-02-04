@@ -37,31 +37,29 @@ def team_results(team_id):
 
 
 ### rf4
-@main.route('/team/<int:team_id>/general_stats', methods=['GET'])
+@main.route("/team/<int:team_id>/general_stats", methods=["GET"])
 def team_general_stats(team_id):
-    """Retorna estatísticas gerais do time para a temporada."""
     stats = get_team_general_stats(team_id)
-
     return jsonify(stats), 200
 
 ### rf5
 @main.route('/team/<int:team_id>/divided_stats', methods=['GET'])
 def team_divided_stats(team_id):
-    """Retorna a divisão de estatísticas do time para a temporada."""
+    """Retorna a divisão de estatísticas do time para a temporada 2023-24 e 2024-25."""
     stats = get_team_divided_stats(team_id)
     return jsonify(stats), 200
 
 ### rf6
 @main.route('/team/<int:team_id>/defensive_stats', methods=['GET'])
 def team_defensive_stats(team_id):
-    """Retorna as estatísticas defensivas do time para a temporada."""
+    """Retorna as estatísticas defensivas do time para ambas as temporadas."""
     stats = get_team_defensive_stats(team_id)
     return jsonify(stats), 200
 
 ### rf7
 @main.route('/team/<int:team_id>/games', methods=['GET'])
 def team_games(team_id):
-    """Retorna a lista de jogos do time para a temporada."""
+    """Retorna a lista de jogos do time para as temporadas 2023-24 e 2024-25."""
     games = get_team_games(team_id)
     return jsonify(games), 200
 
@@ -85,15 +83,17 @@ def graph_radar_points(team_id):
 ### rf9
 @main.route('/team/<int:team_id>/save_all', methods=['GET'])
 def save_all_data(team_id):
-    """Salva todas as estatísticas do time em CSV."""
-    season = "2023-24"
-    
-    save_team_stats_to_csv(team_id, season)
-    save_team_games_to_csv(team_id, season)
-    save_defensive_stats_to_csv(team_id, season)
-    save_offensive_stats_to_csv(team_id, season)
-    save_graph_data_to_csv(team_id, season)
-    
-    return jsonify({"message": f"Todos os dados do time {team_id} foram salvos com sucesso!"}), 200
+    """Salva todas as estatísticas do time para as temporadas 2023-24 e 2024-25 em CSV."""
+    seasons = ["2023-24", "2024-25"]
+
+    for season in seasons:
+        save_team_stats_to_csv(team_id, season)
+        save_team_games_to_csv(team_id, season)
+        save_defensive_stats_to_csv(team_id, season)
+        save_offensive_stats_to_csv(team_id, season)
+        save_graph_data_to_csv(team_id, season)
+
+    return jsonify({"message": f"Todos os dados do time {team_id} para as temporadas 2023-24 e 2024-25 foram salvos com sucesso!"}), 200
+
 
 
