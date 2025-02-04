@@ -122,7 +122,7 @@ def get_team_results(team_id, season="2023-24"):
     response_data = convert_numpy_types(response_data)
 
     # 🔹 Serializa usando orjson e retorna um Response Flask com `application/json`
-    return Response(orjson.dumps(response_data), mimetype="application/json")
+    return response_data
 
 
 #rf4
@@ -279,3 +279,100 @@ def get_team_games(team_id, season="2023-24"):
     }
 
     return response_data
+
+## rf8
+def get_bar_chart_win_loss(team_id, season="2023-24"):
+    """Gera os dados para um gráfico de barras empilhado de vitórias e derrotas."""
+    stats = get_team_results(team_id, season)["results"]
+    
+    return {
+        "type": "bar",
+        "labels": ["Vitórias", "Derrotas"],
+        "values": [stats["Total de Vitórias"], stats["Total de Derrotas"]],
+        "colors": ["green", "red"]
+    }
+
+
+def get_bar_chart_home_away(team_id, season="2023-24"):
+    """Gera os dados para um gráfico de barras agrupado de vitórias e derrotas em casa e fora."""
+    stats = get_team_results(team_id, season)["results"]
+    
+    return {
+        "type": "bar",
+        "labels": ["Vitórias Casa", "Vitórias Fora", "Derrotas Casa", "Derrotas Fora"],
+        "values": [
+            stats["Vitórias em Casa"], stats["Vitórias Fora de Casa"],
+            stats["Derrotas em Casa"], stats["Derrotas Fora de Casa"]
+        ],
+        "colors": ["green", "blue", "red", "brown"]
+    }
+
+
+def get_histogram_win_loss(team_id, season="2023-24"):
+    """Gera os dados para um histograma de vitórias e derrotas."""
+    stats = get_team_results(team_id, season)["results"]
+    
+    return {
+        "type": "histogram",
+        "labels": ["Vitórias", "Derrotas"],
+        "values": [stats["Total de Vitórias"], stats["Total de Derrotas"]],
+        "colors": ["green", "red"]
+    }
+
+
+def get_pie_chart_win_loss(team_id, season="2023-24"):
+    """Gera os dados para um gráfico de pizza de percentual de vitórias e derrotas."""
+    stats = get_team_results(team_id, season)["results"]
+    
+    total_jogos = stats["Total de Vitórias"] + stats["Total de Derrotas"]
+    
+    return {
+        "type": "pie",
+        "labels": ["Vitórias", "Derrotas"],
+        "values": [
+            round(stats["Total de Vitórias"] / total_jogos * 100, 2),
+            round(stats["Total de Derrotas"] / total_jogos * 100, 2)
+        ],
+        "colors": ["green", "red"]
+    }
+
+
+def get_radar_chart_points(team_id, season="2023-24"):
+    """Gera os dados para um gráfico de radar mostrando pontos marcados e sofridos em casa e fora."""
+    games = get_team_games(team_id, season)["games"]
+
+    pontos_marcados_casa = sum([game["Pontos do Time"] for game in games if game["Casa ou Fora"] == "Casa"]) / len(games)
+    pontos_marcados_fora = sum([game["Pontos do Time"] for game in games if game["Casa ou Fora"] == "Fora"]) / len(games)
+
+    return {
+        "type": "radar",
+        "labels": ["Casa", "Fora"],
+        "values": [round(pontos_marcados_casa, 2), round(pontos_marcados_fora, 2)],
+        "colors": ["blue"]
+    }
+
+
+def get_line_chart_win_streak(team_id, season="2023-24"):
+    """Gera os dados para um gráfico de linhas mostrando a sequência de vitórias e derrotas ao longo da temporada."""
+    games = get_team_games(team_id, season)["games"]
+    
+    return {
+        "type": "line",
+        "labels": [game["Data do Jogo"] for game in games],
+        "values": [1 if game["Vitória ou Derrota"] == "W" else 0 for game in games],
+        "colors": ["blue"]
+    }
+
+
+def get_scatter_chart_points(team_id, season="2023-24"):
+    """Gera os dados para um gráfico de dispersão mostrando a média de pontos marcados e sofridos por jogo."""
+    games = get_team_games(team_id, season)["games"]
+
+    return {
+        "type": "scatter",
+        "labels": [game["Adversário"] for game in games],
+        "values": [game["Pontos do Time"] for game in games],
+        "colors": ["orange"]
+    }
+
+

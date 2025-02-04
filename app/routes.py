@@ -1,8 +1,11 @@
 from flask import Blueprint, jsonify
 from app.services import (
     get_teams_by_conference, get_team_rankings,
-    get_team_results, get_team_divided_stats, 
-    get_team_defensive_stats, get_team_games
+    get_team_results, get_team_general_stats, 
+    get_team_divided_stats, 
+    get_team_defensive_stats, get_team_games, 
+    get_bar_chart_win_loss, get_pie_chart_win_loss, 
+    get_radar_chart_points
 )
 
 
@@ -57,6 +60,23 @@ def team_games(team_id):
     """Retorna a lista de jogos do time para a temporada."""
     games = get_team_games(team_id)
     return jsonify(games), 200
+
+### rf8
+
+@main.route('/team/<int:team_id>/graph/bar_win_loss', methods=['GET'])
+def graph_bar_win_loss(team_id):
+    """Retorna os dados para um gráfico de barras empilhado de vitórias e derrotas."""
+    return jsonify(get_bar_chart_win_loss(team_id)), 200
+
+@main.route('/team/<int:team_id>/graph/pie_win_loss', methods=['GET'])
+def graph_pie_win_loss(team_id):
+    """Retorna os dados para um gráfico de pizza de vitórias e derrotas."""
+    return jsonify(get_pie_chart_win_loss(team_id)), 200
+
+@main.route('/team/<int:team_id>/graph/radar_points', methods=['GET'])
+def graph_radar_points(team_id):
+    """Retorna os dados para um gráfico de radar de pontos marcados e sofridos."""
+    return jsonify(get_radar_chart_points(team_id)), 200
 
 
 
