@@ -2,6 +2,9 @@ from nba_api.stats.static import teams
 from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings
 import pandas as pd
 import os
+import numpy as np
+import orjson
+from flask import Response
 
 DATA_DIR = os.path.join(os.getcwd(), "data")
 os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
@@ -72,30 +75,54 @@ def get_team_rankings():
     }
 
 
-
 ### 🔹 RF3 - ESTATÍSTICAS DO TIME (VITÓRIAS E DERROTAS) ###
+
+def convert_numpy_types(obj):
+    """Converte tipos NumPy para tipos nativos do Python antes da serialização"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(i) for i in obj]
+    return obj
+
 def get_team_results(team_id, season="2023-24"):
-    """Obtém estatísticas detalhadas do time na temporada, separando vitórias e derrotas por casa e fora."""
-    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-    df = team_stats.get_data_frames()[1]  # Índice 1 contém estatísticas de casa e fora
+    """Obtém estatísticas detalhadas de vitórias e derrotas do time na temporada, separando casa e fora."""
     
-    selected_columns = {
-        "W": "Total de Vitórias",
-        "W_HOME": "Total de Vitórias em Casa",
-        "W_ROAD": "Total de Vitórias Fora de Casa",
-        "L": "Total de Derrotas",
-        "L_HOME": "Total de Derrotas em Casa",
-        "L_ROAD": "Total de Derrotas Fora de Casa"
-    }
+    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
+    
+    overall_df = team_stats.get_data_frames()[0]  # Estatísticas gerais
+    location_df = team_stats.get_data_frames()[1]  # Estatísticas por local
 
-    df = df[list(selected_columns.keys())]
-    df.rename(columns=selected_columns, inplace=True)
+    # Get home/away stats from location_df based on TEAM_GAME_LOCATION
+    home_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Home'].iloc[0]
+    away_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Road'].iloc[0]
 
-    return {
-        "team_id": team_id,
+    response_data = {
+        "team_id": int(team_id),  # Garante que team_id seja um int nativo
         "season": season,
-        "stats": df.to_dict(orient="records")
+        "results": {
+            "Total de Jogos": int(overall_df["GP"].iloc[0]),
+            "Total de Vitórias": int(overall_df["W"].iloc[0]),
+            "Total de Derrotas": int(overall_df["L"].iloc[0]),
+            "Vitórias em Casa": int(home_stats["W"]),
+            "Vitórias Fora de Casa": int(away_stats["W"]),
+            "Derrotas em Casa": int(home_stats["L"]),
+            "Derrotas Fora de Casa": int(away_stats["L"])
+        }
     }
+
+    # 🔹 Converte qualquer dado NumPy para um tipo serializável
+    response_data = convert_numpy_types(response_data)
+
+    # 🔹 Serializa usando orjson e retorna um Response Flask com `application/json`
+    return Response(orjson.dumps(response_data), mimetype="application/json")
+
 
 ### 🔹 RF4, RF5, RF6 - ESTATÍSTICAS GERAIS E DEFENSIVAS ###
 def get_team_advanced_stats(team_id, season="2023-24"):

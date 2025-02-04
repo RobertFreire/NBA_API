@@ -24,9 +24,8 @@ def team_ranking():
 ### 📌 RF3 - Resultados do time (Vitórias e Derrotas)
 @main.route('/team/<int:team_id>/results', methods=['GET'])
 def team_results(team_id):
-    """Retorna o total de vitórias e derrotas do time para a temporada especificada."""
-    stats = get_team_results(team_id)
-    return jsonify(stats), 200
+    """Retorna os resultados de vitórias e derrotas do time."""
+    return get_team_results(team_id)  # Retorna diretamente o Response
 
 ### 📌 RF4, RF5, RF6 - Estatísticas avançadas do time
 @main.route('/team/<int:team_id>/stats', methods=['GET'])
