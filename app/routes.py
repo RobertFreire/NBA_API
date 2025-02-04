@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify
 from app.services import (
     get_teams_by_conference, get_team_rankings,
-    get_team_results, get_team_general_stats, 
+    get_team_results_both_seasons, get_team_general_stats, 
     get_team_divided_stats, 
     get_team_defensive_stats, get_team_games, 
     get_bar_chart_win_loss, get_pie_chart_win_loss, 
@@ -32,8 +32,9 @@ def team_ranking():
 ### RF3 
 @main.route('/team/<int:team_id>/results', methods=['GET'])
 def team_results(team_id):
-    """Retorna os resultados de vitórias e derrotas do time."""
-    return get_team_results(team_id) 
+    """Retorna os resultados de vitórias e derrotas do time para ambas as temporadas."""
+    return jsonify(get_team_results_both_seasons(team_id)), 200
+
 
 ### rf4
 @main.route('/team/<int:team_id>/general_stats', methods=['GET'])

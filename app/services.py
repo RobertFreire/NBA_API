@@ -62,6 +62,25 @@ def save_graph_data_to_csv(team_id, season="2023-24"):
     for key, data in graphs.items():
         save_to_csv(data, f"graph_{key}_{season}")
 
+def get_team_stats_both_seasons(team_id):
+    """Obtém estatísticas do time para as temporadas 23-24 e a atual (24-25)."""
+    seasons = ["2023-24", "2024-25"]
+    return {
+        season: {
+            "stats": get_team_general_stats(team_id, season),
+            "games": get_team_games(team_id, season),
+            "defensive": get_team_defensive_stats(team_id, season),
+            "offensive": get_team_divided_stats(team_id, season),
+            "graphs": {
+                "bar_win_loss": get_bar_chart_win_loss(team_id, season),
+                "pie_win_loss": get_pie_chart_win_loss(team_id, season),
+                "radar_points": get_radar_chart_points(team_id, season),
+                "line_win_streak": get_line_chart_win_streak(team_id, season),
+                "scatter_points": get_scatter_chart_points(team_id, season),
+            }
+        }
+        for season in seasons
+    }
 
 
 ### 🔹 RF1 - LISTA DE TIMES POR CONFERÊNCIA ###
@@ -146,22 +165,22 @@ def convert_numpy_types(obj):
         return [convert_numpy_types(i) for i in obj]
     return obj
 
-def get_team_results(team_id, season="2023-24"):
-    """Obtém estatísticas detalhadas de vitórias e derrotas do time na temporada, separando casa e fora."""
+def get_team_results_both_seasons(team_id):
+    """Obtém estatísticas detalhadas de vitórias e derrotas do time para as temporadas 23-24 e 24-25."""
     
-    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-    
-    overall_df = team_stats.get_data_frames()[0]  # Estatísticas gerais
-    location_df = team_stats.get_data_frames()[1]  # Estatísticas por local
+    seasons = ["2023-24", "2024-25"]
+    results = {}
 
-    # Get home/away stats from location_df based on TEAM_GAME_LOCATION
-    home_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Home'].iloc[0]
-    away_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Road'].iloc[0]
+    for season in seasons:
+        team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
+        overall_df = team_stats.get_data_frames()[0]  # Estatísticas gerais
+        location_df = team_stats.get_data_frames()[1]  # Estatísticas por local
 
-    response_data = {
-        "team_id": int(team_id),  # Garante que team_id seja um int nativo
-        "season": season,
-        "results": {
+        # Obtendo estatísticas separadas para jogos em casa e fora
+        home_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Home'].iloc[0]
+        away_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Road'].iloc[0]
+
+        results[season] = {
             "Total de Jogos": int(overall_df["GP"].iloc[0]),
             "Total de Vitórias": int(overall_df["W"].iloc[0]),
             "Total de Derrotas": int(overall_df["L"].iloc[0]),
@@ -170,13 +189,12 @@ def get_team_results(team_id, season="2023-24"):
             "Derrotas em Casa": int(home_stats["L"]),
             "Derrotas Fora de Casa": int(away_stats["L"])
         }
+
+    return {
+        "team_id": int(team_id),
+        "results": results
     }
 
-    # 🔹 Converte qualquer dado NumPy para um tipo serializável
-    response_data = convert_numpy_types(response_data)
-
-    # 🔹 Serializa usando orjson e retorna um Response Flask com `application/json`
-    return response_data
 
 
 #rf4
