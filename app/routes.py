@@ -1,9 +1,9 @@
 from flask import Blueprint, jsonify
 from app.services import (
     get_teams_by_conference, get_team_rankings,
-    get_team_results, get_team_advanced_stats,
-    get_team_general_stats 
+    get_team_results, get_team_divided_stats
 )
+
 
 # Criando o Blueprint
 main = Blueprint('main', __name__)
@@ -36,10 +36,10 @@ def team_general_stats(team_id):
 
     return jsonify(stats), 200
 
-
-### 📌 RF4, RF5, RF6 - Estatísticas avançadas do time
-@main.route('/team/<int:team_id>/stats', methods=['GET'])
-def team_advanced_stats(team_id):
-    """Retorna estatísticas avançadas do time na temporada especificada."""
-    stats = get_team_advanced_stats(team_id)
+### rf5
+@main.route('/team/<int:team_id>/divided_stats', methods=['GET'])
+def team_divided_stats(team_id):
+    """Retorna a divisão de estatísticas do time para a temporada."""
+    stats = get_team_divided_stats(team_id)
     return jsonify(stats), 200
+

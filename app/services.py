@@ -168,5 +168,45 @@ def get_team_general_stats(team_id, season="2023-24"):
 
     return response_data
 
+##rf5
 
+def get_team_divided_stats(team_id, season="2023-24"):
+    """Obtém a divisão de estatísticas de rebotes, pontos e arremessos do time na temporada."""
+    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
+    df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
+
+    selected_columns = {
+        "REB": "Total de Rebotes",
+        "OREB": "Total de Rebotes Ofensivos",
+        "DREB": "Total de Rebotes Defensivos",
+        "PTS": "Total de Pontos",
+        "FGM": "Total de Cestas Convertidas",
+        "FG3M": "Total de Cestas de 3 Pontos",
+        "FTM": "Total de Lances Livres Convertidos"
+    }
+
+    # Filtrar e renomear colunas
+    df = df[list(selected_columns.keys())]
+    df.rename(columns=selected_columns, inplace=True)
+
+    # 🔹 Calculando as cestas de 2 pontos
+    total_cestas_convertidas = df["Total de Cestas Convertidas"].iloc[0]
+    total_cestas_3_pontos = df["Total de Cestas de 3 Pontos"].iloc[0]
+    total_cestas_2_pontos = total_cestas_convertidas - total_cestas_3_pontos  # Cestas de 2P = Total - 3P
+
+    response_data = {
+        "team_id": int(team_id),
+        "season": season,
+        "stats": {
+            "Total de Rebotes": int(df["Total de Rebotes"].iloc[0]),
+            "Total de Rebotes Ofensivos": int(df["Total de Rebotes Ofensivos"].iloc[0]),
+            "Total de Rebotes Defensivos": int(df["Total de Rebotes Defensivos"].iloc[0]),
+            "Total de Pontos": int(df["Total de Pontos"].iloc[0]),
+            "Total de Cestas de 2 Pontos": int(total_cestas_2_pontos),
+            "Total de Cestas de 3 Pontos": int(df["Total de Cestas de 3 Pontos"].iloc[0]),
+            "Total de Lances Livres Convertidos": int(df["Total de Lances Livres Convertidos"].iloc[0])
+        }
+    }
+
+    return response_data
 
