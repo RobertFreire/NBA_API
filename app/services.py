@@ -42,18 +42,36 @@ def get_teams_by_conference():
 
 ### 🔹 RF2 - CLASSIFICAÇÃO ATUAL DOS TIMES ###
 def get_team_rankings():
-    """Obtém a classificação atual dos times da NBA agrupados por conferência."""
-    standings = LeagueStandings().get_data_frames()[0]
+    """Obtém a classificação dos times por conferência."""
+    from nba_api.stats.endpoints import LeagueStandings
 
-    east_teams = standings[standings["Conference"] == "East"][["TeamID", "TeamCity", "TeamName", "ConferenceRank"]]
-    west_teams = standings[standings["Conference"] == "West"][["TeamID", "TeamCity", "TeamName", "ConferenceRank"]]
+    standings = LeagueStandings(season="2023-24").get_data_frames()[0]
 
-    rankings = {
+    print("Colunas disponíveis:", standings.columns.tolist())  # Debugging
+
+    # Verificando quais colunas têm relação com a classificação
+    possible_rank_columns = ["PlayoffRank", "ConfRank", "WINS"]  # Alternativas possíveis
+
+    # Encontrar a primeira coluna de ranking válida
+    rank_column = next((col for col in possible_rank_columns if col in standings.columns), None)
+
+    if not rank_column:
+        return {"error": "Nenhuma coluna de ranking encontrada nos dados."}
+
+    east_teams = standings[standings["Conference"] == "East"][
+        ["TeamID", "TeamCity", "TeamName", rank_column]
+    ].rename(columns={rank_column: "ConferenceRank"}).sort_values(by="ConferenceRank")
+
+    west_teams = standings[standings["Conference"] == "West"][
+        ["TeamID", "TeamCity", "TeamName", rank_column]
+    ].rename(columns={rank_column: "ConferenceRank"}).sort_values(by="ConferenceRank")
+
+    return {
         "Conferência Leste": east_teams.to_dict(orient="records"),
-        "Conferência Oeste": west_teams.to_dict(orient="records"),
+        "Conferência Oeste": west_teams.to_dict(orient="records")
     }
 
-    return rankings
+
 
 ### 🔹 RF3 - ESTATÍSTICAS DO TIME (VITÓRIAS E DERROTAS) ###
 def get_team_results(team_id, season="2023-24"):
