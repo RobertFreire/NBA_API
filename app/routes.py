@@ -1,49 +1,36 @@
-from flask import Blueprint, jsonify, render_template
-from app.services import get_team_stats_both_seasons, get_team_stats, get_player_stats
-from app.statistics import calculate_team_stats, calculate_player_stats
-from app.ml_model import train_player_model
+from flask import Blueprint, jsonify
+from app.services import (
+    get_teams_by_conference, get_team_rankings,
+    get_team_results, get_team_advanced_stats
+)
 
 # Criando o Blueprint
 main = Blueprint('main', __name__)
 
-### 📌 RF1.1 - Listar estatísticas do time para `23-24` e `24-25`
-@main.route('/team/stats', methods=['GET'])
-def team_advanced_stats():
-    """Retorna estatísticas do New Orleans Pelicans para `23-24` e `24-25`."""
-    stats = get_team_stats_both_seasons()
+### 📌 RF1 - Listar todos os times da NBA agrupados por conferência
+@main.route('/teams', methods=['GET'])
+def list_teams():
+    """Retorna todos os times da NBA agrupados por conferência."""
+    teams = get_teams_by_conference()
+    return jsonify(teams), 200
+
+### 📌 RF2 - Apresentar a classificação atual dos times
+@main.route('/teams/ranking', methods=['GET'])
+def team_ranking():
+    """Retorna a classificação atual dos times agrupados por conferência."""
+    rankings = get_team_rankings()
+    return jsonify(rankings), 200
+
+### 📌 RF3 - Resultados do time (Vitórias e Derrotas)
+@main.route('/team/<int:team_id>/results', methods=['GET'])
+def team_results(team_id):
+    """Retorna o total de vitórias e derrotas do time para a temporada especificada."""
+    stats = get_team_results(team_id)
     return jsonify(stats), 200
 
-### 📌 RF1.2 - Estatísticas do time para uma temporada específica
-@main.route('/team/stats/<season>', methods=['GET'])
-def team_stats_season(season):
-    """Retorna estatísticas do New Orleans Pelicans para uma temporada específica."""
-    stats = get_team_stats(season)
+### 📌 RF4, RF5, RF6 - Estatísticas avançadas do time
+@main.route('/team/<int:team_id>/stats', methods=['GET'])
+def team_advanced_stats(team_id):
+    """Retorna estatísticas avançadas do time na temporada especificada."""
+    stats = get_team_advanced_stats(team_id)
     return jsonify(stats), 200
-
-### 📌 RF2.1 - Estatísticas detalhadas de um jogador por temporada
-@main.route('/player/<int:player_id>/stats', methods=['GET'])
-def player_advanced_stats(player_id):
-    """Retorna estatísticas descritivas do jogador pelo ID."""
-    stats = get_player_stats(player_id)
-    
-    if "error" in stats:
-        return jsonify(stats), 404
-
-    return jsonify(stats), 200
-
-### 📌 RF3.1 - Prever a pontuação de um jogador na próxima temporada
-@main.route('/player/<int:player_id>/predict', methods=['GET'])
-def predict_player_performance(player_id):
-    """Prevê a pontuação de um jogador na próxima temporada usando Machine Learning."""
-    prediction = train_player_model(player_id)
-    
-    if "error" in prediction:
-        return jsonify(prediction), 400
-
-    return jsonify(prediction), 200
-
-### 📌 RF10.1 - Criar Dashboard interativo com gráficos e estatísticas
-@main.route('/dashboard', methods=['GET'])
-def dashboard():
-    """Renderiza um dashboard interativo com gráficos e estatísticas do time e dos jogadores."""
-    return render_template("dashboard.html")

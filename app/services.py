@@ -1,93 +1,88 @@
-from nba_api.stats.static import teams, players
-from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, PlayerCareerStats
+from nba_api.stats.static import teams
+from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings
+import pandas as pd
 import os
 
-# Diretório base para os dados (não será usado para leitura/escrita de arquivos)
 DATA_DIR = os.path.join(os.getcwd(), "data")
+os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
 
-# 🔹 Obtendo ID do New Orleans Pelicans
-def get_pelicans_id():
-    """Retorna o ID do New Orleans Pelicans."""
+### 🔹 RF1 - LISTA DE TIMES POR CONFERÊNCIA ###
+def get_teams_by_conference():
+    """Retorna uma lista de times da NBA agrupados por conferência."""
     nba_teams = teams.get_teams()
-    pelicans = next(team for team in nba_teams if team['full_name'] == 'New Orleans Pelicans')
-    return pelicans['id']
+    
+    teams_by_conf = {"Conferência Leste": [], "Conferência Oeste": []}
+    
+    for team in nba_teams:
+        if team["conference"] == "East":
+            teams_by_conf["Conferência Leste"].append({"id": team["id"], "nome": team["full_name"]})
+        else:
+            teams_by_conf["Conferência Oeste"].append({"id": team["id"], "nome": team["full_name"]})
 
-# 🔹 Obtendo Estatísticas do Time para uma Temporada Específica
-def get_team_stats(season="2023-24"):
-    """Obtém estatísticas do New Orleans Pelicans para uma temporada específica."""
-    team_id = get_pelicans_id()
+    return teams_by_conf
+
+### 🔹 RF2 - CLASSIFICAÇÃO ATUAL DOS TIMES ###
+def get_team_rankings():
+    """Obtém a classificação atual dos times da NBA agrupados por conferência."""
+    standings = LeagueStandings().get_data_frames()[0]
+
+    east_teams = standings[standings["Conference"] == "East"][["TeamID", "TeamCity", "TeamName", "ConferenceRank"]]
+    west_teams = standings[standings["Conference"] == "West"][["TeamID", "TeamCity", "TeamName", "ConferenceRank"]]
+
+    rankings = {
+        "Conferência Leste": east_teams.to_dict(orient="records"),
+        "Conferência Oeste": west_teams.to_dict(orient="records"),
+    }
+
+    return rankings
+
+### 🔹 RF3 - ESTATÍSTICAS DO TIME (VITÓRIAS E DERROTAS) ###
+def get_team_results(team_id, season="2023-24"):
+    """Obtém estatísticas detalhadas do time na temporada, separando vitórias e derrotas por casa e fora."""
     team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-    df = team_stats.get_data_frames()[0]
+    df = team_stats.get_data_frames()[1]  # Índice 1 contém estatísticas de casa e fora
+    
+    selected_columns = {
+        "W": "Total de Vitórias",
+        "W_HOME": "Total de Vitórias em Casa",
+        "W_ROAD": "Total de Vitórias Fora de Casa",
+        "L": "Total de Derrotas",
+        "L_HOME": "Total de Derrotas em Casa",
+        "L_ROAD": "Total de Derrotas Fora de Casa"
+    }
+
+    df = df[list(selected_columns.keys())]
+    df.rename(columns=selected_columns, inplace=True)
 
     return {
         "team_id": team_id,
-        "team_name": "New Orleans Pelicans",
         "season": season,
-        "total_victories": int(df["W"][0]),
-        "home_victories": int(df["HOME_W"][0]),  
-        "away_victories": int(df["ROAD_W"][0]),
-        "total_losses": int(df["L"][0]),
-        "home_losses": int(df["HOME_L"][0]),  
-        "away_losses": int(df["ROAD_L"][0]),
-        "win_percentage": float(df["W_PCT"][0]),
-        "points_total": int(df["PTS"][0]),
-        "points_per_game": float(df["PTS"][0] / df["GP"][0]),
-        "assists_total": int(df["AST"][0]),
-        "assists_per_game": float(df["AST"][0] / df["GP"][0]),
-        "rebounds_total": int(df["REB"][0]),
-        "rebounds_per_game": float(df["REB"][0] / df["GP"][0]),
-        "steals": int(df["STL"][0]),
-        "blocks": int(df["BLK"][0]),
-        "three_pointers_made": int(df["FG3M"][0]),
-        "two_pointers_made": int(df["FG2M"][0]),
-        "free_throws_made": int(df["FTM"][0]),
-        "offensive_rebounds": int(df["OREB"][0]),
-        "defensive_rebounds": int(df["DREB"][0]),
-        "free_throw_percentage": float(df["FT_PCT"][0])
+        "stats": df.to_dict(orient="records")
     }
 
-# 🔹 Obtendo Estatísticas do Time para as Duas Temporadas (RF1.1)
-def get_team_stats_both_seasons():
-    """Retorna estatísticas do New Orleans Pelicans para as temporadas `23-24` e `24-25`."""
-    return {
-        "2023-24": get_team_stats("2023-24"),
-        "2024-25": get_team_stats("2024-25")
+### 🔹 RF4, RF5, RF6 - ESTATÍSTICAS GERAIS E DEFENSIVAS ###
+def get_team_advanced_stats(team_id, season="2023-24"):
+    """Obtém estatísticas avançadas do time para a temporada."""
+    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
+    df = team_stats.get_data_frames()[0]  # Índice 0 contém estatísticas gerais
+
+    selected_columns = {
+        "PTS": "Total de Pontos por Jogo",
+        "AST": "Total de Assistências por Jogo",
+        "REB": "Total de Rebotes por Jogo",
+        "FG3M": "Total de Cestas de 3 Pontos Convertidas",
+        "REB_O": "Total de Rebotes Ofensivos",
+        "REB_D": "Total de Rebotes Defensivos",
+        "BLK": "Total de Tocos por Jogo",
+        "TOV": "Total de Erros por Jogo",
+        "PF": "Total de Faltas por Jogo"
     }
 
-# 🔹 Obtendo ID de um Jogador pelo Nome
-def get_player_id(player_name):
-    """Retorna o ID do jogador da NBA pelo nome."""
-    nba_players = players.get_players()
-    player = next((p for p in nba_players if p['full_name'] == player_name), None)
-
-    if not player:
-        return None  # Retorna None se o jogador não for encontrado
-
-    return player['id']
-
-# 🔹 Obtendo Estatísticas do Jogador
-def get_player_stats(player_id):
-    """Obtém estatísticas de um jogador da NBA pelo ID."""
-    player_stats = PlayerCareerStats(player_id=player_id)
-    df = player_stats.get_data_frames()[0]
+    df = df[list(selected_columns.keys())]
+    df.rename(columns=selected_columns, inplace=True)
 
     return {
-        "player_id": player_id,
-        "stats": [
-            {
-                "season": row["SEASON_ID"],
-                "team": row["TEAM_ABBREVIATION"],
-                "games_played": int(row["GP"]),
-                "total_points": int(row["PTS"]),
-                "points_per_game": float(row["PTS"] / row["GP"]),
-                "total_assists": int(row["AST"]),
-                "assists_per_game": float(row["AST"] / row["GP"]),
-                "total_rebounds": int(row["REB"]),
-                "rebounds_per_game": float(row["REB"] / row["GP"]),
-                "field_goal_percentage": float(row["FG_PCT"]),
-                "three_point_percentage": float(row["FG3_PCT"]),
-                "free_throw_percentage": float(row["FT_PCT"]),
-            }
-            for _, row in df.iterrows()
-        ]
+        "team_id": team_id,
+        "season": season,
+        "stats": df.to_dict(orient="records")
     }
