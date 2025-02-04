@@ -210,3 +210,34 @@ def get_team_divided_stats(team_id, season="2023-24"):
 
     return response_data
 
+## rf6
+def get_team_defensive_stats(team_id, season="2023-24"):
+    """Obtém estatísticas defensivas do time para a temporada."""
+    team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
+    df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
+
+    selected_columns = {
+        "STL": "Total de Roubos de Bola",
+        "DREB": "Total de Rebotes Defensivos",
+        "BLK": "Total de Tocos por Jogo",
+        "TOV": "Total de Erros por Jogo",
+        "PF": "Total de Faltas por Jogo"
+    }
+
+    # Filtrar e renomear colunas
+    df = df[list(selected_columns.keys())]
+    df.rename(columns=selected_columns, inplace=True)
+
+    response_data = {
+        "team_id": int(team_id),
+        "season": season,
+        "stats": {
+            "Total de Roubos de Bola": int(df["Total de Roubos de Bola"].iloc[0]),
+            "Total de Rebotes Defensivos": int(df["Total de Rebotes Defensivos"].iloc[0]),
+            "Total de Tocos por Jogo": int(df["Total de Tocos por Jogo"].iloc[0]),
+            "Total de Erros por Jogo": int(df["Total de Erros por Jogo"].iloc[0]),
+            "Total de Faltas por Jogo": int(df["Total de Faltas por Jogo"].iloc[0])
+        }
+    }
+
+    return response_data

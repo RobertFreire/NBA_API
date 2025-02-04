@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify
 from app.services import (
     get_teams_by_conference, get_team_rankings,
-    get_team_results, get_team_divided_stats
+    get_team_results, get_team_divided_stats, 
+    get_team_defensive_stats
 )
 
 
@@ -42,4 +43,12 @@ def team_divided_stats(team_id):
     """Retorna a divisão de estatísticas do time para a temporada."""
     stats = get_team_divided_stats(team_id)
     return jsonify(stats), 200
+
+### rf6
+@main.route('/team/<int:team_id>/defensive_stats', methods=['GET'])
+def team_defensive_stats(team_id):
+    """Retorna as estatísticas defensivas do time para a temporada."""
+    stats = get_team_defensive_stats(team_id)
+    return jsonify(stats), 200
+
 
