@@ -2,12 +2,14 @@ from flask import Blueprint, jsonify
 from app.services import (
     get_teams_by_conference, get_team_rankings,
     get_team_results_both_seasons, get_team_general_stats, 
-    get_team_divided_stats, 
+    get_team_divided_stats, get_line_chart_win_streak,
     get_team_defensive_stats, get_team_games, 
-    get_bar_chart_win_loss, get_pie_chart_win_loss, 
+    get_bar_chart_win_loss, get_pie_chart_win_loss,
+    get_bar_chart_home_away, get_histogram_win_loss,
     get_radar_chart_points, save_team_stats_to_csv,
     save_team_games_to_csv, save_defensive_stats_to_csv,
-    save_offensive_stats_to_csv, save_graph_data_to_csv
+    save_offensive_stats_to_csv, save_graph_data_to_csv,
+    get_scatter_chart_points
 
 )
 
@@ -70,6 +72,11 @@ def graph_bar_win_loss(team_id):
     """Retorna os dados para um gráfico de barras empilhado de vitórias e derrotas."""
     return jsonify(get_bar_chart_win_loss(team_id)), 200
 
+@main.route('/team/<int:team_id>/graph/bar_home_away', methods=['GET'])
+def graph_bar_home_away(team_id):
+    """Retorna os dados para um gráfico de barras agrupado de vitórias e derrotas em casa e fora."""
+    return jsonify(get_bar_chart_home_away(team_id)), 200
+
 @main.route('/team/<int:team_id>/graph/pie_win_loss', methods=['GET'])
 def graph_pie_win_loss(team_id):
     """Retorna os dados para um gráfico de pizza de vitórias e derrotas."""
@@ -79,6 +86,21 @@ def graph_pie_win_loss(team_id):
 def graph_radar_points(team_id):
     """Retorna os dados para um gráfico de radar de pontos marcados e sofridos."""
     return jsonify(get_radar_chart_points(team_id)), 200
+
+@main.route('/team/<int:team_id>/graph/histogram_win_loss', methods=['GET'])
+def graph_histogram_win_loss(team_id):
+    """Retorna os dados para um gráfico de histograma de vitórias e derrotas."""
+    return jsonify(get_histogram_win_loss(team_id)), 200
+
+@main.route('/team/<int:team_id>/graph/line_win_streak', methods=['GET'])
+def graph_line_win_streak(team_id):
+    """Retorna os dados para um gráfico de linhas mostrando a sequência de vitórias e derrotas ao longo da temporada."""
+    return jsonify(get_line_chart_win_streak(team_id)), 200
+
+@main.route('/team/<int:team_id>/graph/scatter_points', methods=['GET'])
+def graph_scatter_points(team_id):
+    """Retorna os dados para um gráfico de dispersão mostrando a média de pontos marcados e sofridos durante a temporada."""
+    return jsonify(get_scatter_chart_points(team_id)), 200
 
 ### rf9
 @main.route('/team/<int:team_id>/save_all', methods=['GET'])

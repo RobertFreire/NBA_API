@@ -1,6 +1,6 @@
 from nba_api.stats.static import teams
-from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings
-from nba_api.stats.endpoints import TeamGameLog
+from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings, BoxScoreTraditionalV2
+from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs
 import pandas as pd
 import os
 import numpy as np
@@ -220,7 +220,7 @@ def get_team_general_stats(team_id):
         df = data_frames[0]
         selected_columns = {
             "PTS": "Total de Pontos por Jogo",
-            "AST": "Total de Assistências por Jogo",
+            "AST": "Total de Assistencias por Jogo",
             "REB": "Total de Rebotes por Jogo",
             "FG3M": "Total de Cestas de 3 Pontos Convertidas"
         }
@@ -348,14 +348,17 @@ def get_team_games(team_id, season=None):
     games = {}
     
     for season in seasons:
-        team_games = TeamGameLog(team_id=team_id, season=season)
+        team_games = TeamGameLogs(team_id_nullable=team_id, season_nullable=season)
         df = team_games.get_data_frames()[0]  # Pegamos os dados de jogos
 
         selected_columns = {
             "GAME_DATE": "Data do Jogo",
             "MATCHUP": "Adversario",
             "WL": "Vitoria ou Derrota",
-            "PTS": "Pontos do Time"
+            "PTS": "Pontos do Time",
+            "GAME_ID": "Game_ID",
+            "TEAM_ID": "Team_ID",
+            "PLUS_MINUS": "Saldo de Pontos"
         }
 
         # Se a coluna PLUS_MINUS existir, adicionamos ela
@@ -365,6 +368,11 @@ def get_team_games(team_id, season=None):
         # Filtramos apenas as colunas existentes
         existing_columns = [col for col in selected_columns.keys() if col in df.columns]
         df = df[existing_columns].rename(columns={col: selected_columns[col] for col in existing_columns})
+
+        if "Saldo de Pontos" in df.columns:
+            df["Pontos do Adversario"] = df["Pontos do Time"] - df["Saldo de Pontos"]
+        else:
+            df["Pontos do Adversario"] = None 
 
         # Transformar a coluna "Adversário" para indicar se o jogo foi em casa ou fora
         df["Casa ou Fora"] = df["Adversario"].apply(lambda x: "Casa" if "vs." in x else "Fora")
@@ -401,35 +409,62 @@ def get_bar_chart_win_loss(team_id):
     return data
 
 
-def get_bar_chart_home_away(team_id, season="2023-24"):
-    """Gera os dados para um gráfico de barras agrupado de vitorias e derrotas em casa e fora."""
-    stats = get_team_results_both_seasons(team_id)["results"]
-    
-    return {
+def get_bar_chart_home_away(team_id):
+    """Gera os dados para um gráfico de barras agrupado de vitórias e derrotas em casa e fora."""
+    results = get_team_results_both_seasons(team_id)["results"]
+
+    data = {
         "type": "bar",
-        "labels": ["Vitorias Casa", "Vitorias Fora", "Derrotas Casa", "Derrotas Fora"],
-        "values": [
-            stats["Vitorias em Casa"], stats["Vitorias Fora de Casa"],
-            stats["Derrotas em Casa"], stats["Derrotas Fora de Casa"]
-        ],
-        "colors": ["green", "blue", "red", "brown"]
+        "seasons": {}
     }
 
+    for season, stats in results.items():
+        total_vitorias_casa = stats.get("Vitorias em Casa", 0)
+        total_vitorias_fora = stats.get("Vitorias Fora de Casa", 0)
+        total_derrotas_casa = stats.get("Derrotas em Casa", 0)
+        total_derrotas_fora = stats.get("Derrotas Fora de Casa", 0)
 
-def get_histogram_win_loss(team_id, season="2023-24"):
-    """Gera os dados para um histograma de vitórias e derrotas."""
-    stats = get_team_results_both_seasons(team_id)["results"]
-    
-    return {
+        data["seasons"][season] = {
+            "labels": ["Vitórias em Casa", "Vitórias Fora de Casa", "Derrotas em Casa", "Derrotas Fora de Casa"],
+            "values": [
+                total_vitorias_casa, total_vitorias_fora,
+                total_derrotas_casa, total_derrotas_fora
+            ],
+            "colors": ["green", "blue", "red", "brown"]
+        }
+
+    return data
+
+
+def get_histogram_win_loss(team_id):
+    """Gera os dados para um histograma de vitórias e derrotas para todas as temporadas disponíveis."""
+    results = get_team_games(team_id)
+
+    data = {
         "type": "histogram",
-        "labels": ["Vitorias", "Derrotas"],
-        "values": [stats["Total de Vitorias"], stats["Total de Derrotas"]],
-        "colors": ["green", "red"]
+        "seasons": {}
     }
+
+    for season, season_data in results.items():
+        games = season_data["games"]
+        game_dates = []
+        game_results = []
+
+        for game in games:
+            game_dates.append(game["Data do Jogo"])
+            game_results.append(1 if game["Vitoria ou Derrota"] == "W" else 0)
+
+        data["seasons"][season] = {
+            "dates": game_dates,
+            "results": game_results,
+            "colors": ["green", "red"]
+        }
+
+    return data
 
 
 def get_pie_chart_win_loss(team_id):
-    """Gera os dados para um gráfico de pizza de percentual de vitórias e derrotas para todas as temporadas disponíveis."""
+    """Gera os dados para um gráfico de pizza de percentual de vitórias e derrotas em casa e fora para todas as temporadas disponíveis."""
     results = get_team_results_both_seasons(team_id)["results"]
 
     data = {
@@ -442,20 +477,27 @@ def get_pie_chart_win_loss(team_id):
         if total_jogos == 0:
             continue
 
+        total_vitorias_casa = stats.get("Vitorias em Casa", 0)
+        total_vitorias_fora = stats.get("Vitorias Fora de Casa", 0)
+        total_derrotas_casa = stats.get("Derrotas em Casa", 0)
+        total_derrotas_fora = stats.get("Derrotas Fora de Casa", 0)
+
         data["seasons"][season] = {
-            "labels": ["Vitorias", "Derrotas"],
+            "labels": ["Vitórias em Casa", "Vitórias Fora de Casa", "Derrotas em Casa", "Derrotas Fora de Casa"],
             "values": [
-                round(stats.get("Total de Vitorias", 0) / total_jogos * 100, 2),
-                round(stats.get("Total de Derrotas", 0) / total_jogos * 100, 2)
+                round(total_vitorias_casa / total_jogos * 100, 2),
+                round(total_vitorias_fora / total_jogos * 100, 2),
+                round(total_derrotas_casa / total_jogos * 100, 2),
+                round(total_derrotas_fora / total_jogos * 100, 2)
             ],
-            "colors": ["green", "red"]
+            "colors": ["green", "blue", "red", "orange"]
         }
 
     return data
 
 
 def get_radar_chart_points(team_id):
-    """Gera os dados para um gráfico de radar mostrando pontos marcados e sofridos em casa e fora para todas as temporadas disponíveis."""
+    """Gera os dados para um gráfico de radar mostrando a média de pontos marcados e sofridos em casa e fora para todas as temporadas disponíveis."""
     results = get_team_games(team_id)
 
     data = {
@@ -463,40 +505,79 @@ def get_radar_chart_points(team_id):
         "seasons": {}
     }
 
-    for season, games in results.items():
-        pontos_marcados_casa = sum([game["Pontos do Time"] for game in games["games"] if game["Casa ou Fora"] == "Casa"]) / len(games["games"])
-        pontos_marcados_fora = sum([game["Pontos do Time"] for game in games["games"] if game["Casa ou Fora"] == "Fora"]) / len(games["games"])
+    for season, season_data in results.items():
+        games = season_data["games"]
+        pontos_marcados_casa = []
+        pontos_marcados_fora = []
+        pontos_sofridos_casa = []
+        pontos_sofridos_fora = []
+
+        for game in games:
+            if game["Casa ou Fora"] == "Casa":
+                pontos_marcados_casa.append(game["Pontos do Time"])
+                pontos_sofridos_casa.append(game["Pontos do Adversario"])
+            else:
+                pontos_marcados_fora.append(game["Pontos do Time"])
+                pontos_sofridos_fora.append(game["Pontos do Adversario"])
+
+        media_pontos_marcados_casa = sum(pontos_marcados_casa) / len(pontos_marcados_casa) if pontos_marcados_casa else 0
+        media_pontos_marcados_fora = sum(pontos_marcados_fora) / len(pontos_marcados_fora) if pontos_marcados_fora else 0
+        media_pontos_sofridos_casa = sum(pontos_sofridos_casa) / len(pontos_sofridos_casa) if pontos_sofridos_casa else 0
+        media_pontos_sofridos_fora = sum(pontos_sofridos_fora) / len(pontos_sofridos_fora) if pontos_sofridos_fora else 0
 
         data["seasons"][season] = {
-            "labels": ["Casa", "Fora"],
-            "values": [round(pontos_marcados_casa, 2), round(pontos_marcados_fora, 2)],
+            "labels": ["Pontos Marcados em Casa", "Pontos Marcados Fora", "Pontos Sofridos em Casa", "Pontos Sofridos Fora"],
+            "values": [
+                round(media_pontos_marcados_casa, 2),
+                round(media_pontos_marcados_fora, 2),
+                round(media_pontos_sofridos_casa, 2),
+                round(media_pontos_sofridos_fora, 2)
+            ],
+            "colors": ["blue", "green", "red", "orange"]
+        }
+
+    return data
+
+
+def get_line_chart_win_streak(team_id):
+    """Gera os dados para um gráfico de linhas mostrando a sequência de vitórias e derrotas ao longo da temporada."""
+    results = get_team_games(team_id)
+
+    data = {
+        "type": "line",
+        "seasons": {}
+    }
+
+    for season, season_data in results.items():
+        games = season_data["games"]
+        
+        data["seasons"][season] = {
+            "labels": [game["Data do Jogo"] for game in games],
+            "values": [1 if game["Vitoria ou Derrota"] == "W" else 0 for game in games],
             "colors": ["blue"]
         }
 
     return data
 
 
-def get_line_chart_win_streak(team_id, season="2023-24"):
-    """Gera os dados para um gráfico de linhas mostrando a sequência de vitórias e derrotas ao longo da temporada."""
-    games = get_team_games(team_id, season)["games"]
-    
-    return {
-        "type": "line",
-        "labels": [game["Data do Jogo"] for game in games],
-        "values": [1 if game["Vitória ou Derrota"] == "W" else 0 for game in games],
-        "colors": ["blue"]
-    }
-
-
-def get_scatter_chart_points(team_id, season="2023-24"):
+def get_scatter_chart_points(team_id):
     """Gera os dados para um gráfico de dispersão mostrando a média de pontos marcados e sofridos por jogo."""
-    games = get_team_games(team_id, season)["games"]
+    results = get_team_games(team_id)
 
-    return {
+    data = {
         "type": "scatter",
-        "labels": [game["Adversário"] for game in games],
-        "values": [game["Pontos do Time"] for game in games],
-        "colors": ["orange"]
+        "seasons": {}
     }
+
+    for season, season_data in results.items():
+        games = season_data["games"]
+        
+        data["seasons"][season] = {
+            "labels": [game["Adversario"] for game in games],
+            "values": [game["Pontos do Time"] for game in games],
+            "colors": ["orange"]
+        }
+
+    return data
 
 
