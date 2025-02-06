@@ -13,7 +13,7 @@ from app.services import (
     get_scatter_chart_points, get_team_basic_info,
     get_team_players_info, get_player_game_logs,
     count_team_games, get_player_stats, get_player_career_stats, get_player_season_vs_career,
-    save_player_stats_to_csv, save_player_games_to_csv
+    save_player_stats_to_csv, save_player_games_to_csv, save_performance_graphs
 )
 
 
@@ -195,3 +195,8 @@ def save_player_stats(player_id):
     save_player_games_to_csv(player_id)
     return jsonify({"message": f"Estatísticas e jogos do jogador {player_id} salvos com sucesso!"}), 200
 
+@main.route('/player/<int:player_id>/generate_graphs', methods=['GET'])
+def generate_graphs(player_id):
+    """Gera e salva gráficos de desempenho do jogador em HTML."""
+    save_performance_graphs(player_id)
+    return jsonify({"message": f"Gráficos do jogador {player_id} gerados com sucesso!"}), 200

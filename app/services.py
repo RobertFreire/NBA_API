@@ -15,6 +15,8 @@ from requests.exceptions import ReadTimeout
 from functools import lru_cache
 import time
 import csv
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 DATA_DIR = os.path.join(os.getcwd(), "data")
 os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
@@ -967,3 +969,74 @@ def save_player_games_to_csv(player_id):
             ])
     
     print(f"✅ Jogos do jogador {player_id} salvos em {file_path}")
+
+
+def save_performance_graphs(player_id):
+    """Gera e salva gráficos de desempenho do jogador em HTML."""
+    stats = get_player_stats(player_id)
+    if "error" in stats:
+        print(f"Erro ao gerar gráficos do jogador {player_id}: {stats['error']}")
+        return
+
+    # Extrair dados
+    games = get_player_game_logs(player_id)
+    if not games or player_id not in games:
+        print(f"Erro ao gerar gráficos: Nenhum dado de jogos encontrado para o jogador {player_id}.")
+        return
+
+    points = [game["Pontos"] for game in games[player_id]]
+    rebounds = [game["Rebotes"] for game in games[player_id]]
+    assists = [game["Assistências"] for game in games[player_id]]
+
+    # Criar os gráficos
+    file_path = os.path.join(DATA_DIR, f"player_graphs_{player_id}.html")
+
+    with open(file_path, "w") as f:
+        f.write("<html><head><title>Gráficos de Desempenho</title></head><body>")
+
+        def save_and_embed(fig, title):
+            img_path = os.path.join(DATA_DIR, f"{title}_{player_id}.png")
+            fig.savefig(img_path)
+            plt.close(fig)
+            f.write(f'<h2>{title}</h2><img src="{img_path}" width="600"><br>')
+
+        # 📌 **Gráfico de Distribuição - Pontos**
+        fig = plt.figure()
+        sns.histplot(points, bins=10, kde=True, color="blue")
+        plt.axvline(stats["average"]["points"], color="red", linestyle="dashed", linewidth=2, label="Média")
+        plt.axvline(stats["median"]["points"], color="green", linestyle="dashed", linewidth=2, label="Mediana")
+        plt.axvline(stats["mode"]["points"], color="purple", linestyle="dashed", linewidth=2, label="Moda")
+        plt.legend()
+        plt.title("Distribuição de Pontos por Jogo")
+        save_and_embed(fig, "Distribuição_Pontos")
+
+        # 📌 **Gráfico de Distribuição - Rebotes**
+        fig = plt.figure()
+        sns.histplot(rebounds, bins=10, kde=True, color="orange")
+        plt.axvline(stats["average"]["rebounds"], color="red", linestyle="dashed", linewidth=2, label="Média")
+        plt.axvline(stats["median"]["rebounds"], color="green", linestyle="dashed", linewidth=2, label="Mediana")
+        plt.axvline(stats["mode"]["rebounds"], color="purple", linestyle="dashed", linewidth=2, label="Moda")
+        plt.legend()
+        plt.title("Distribuição de Rebotes por Jogo")
+        save_and_embed(fig, "Distribuição_Rebotes")
+
+        # 📌 **Gráfico de Distribuição - Assistências**
+        fig = plt.figure()
+        sns.histplot(assists, bins=10, kde=True, color="red")
+        plt.axvline(stats["average"]["assists"], color="blue", linestyle="dashed", linewidth=2, label="Média")
+        plt.axvline(stats["median"]["assists"], color="green", linestyle="dashed", linewidth=2, label="Mediana")
+        plt.axvline(stats["mode"]["assists"], color="purple", linestyle="dashed", linewidth=2, label="Moda")
+        plt.legend()
+        plt.title("Distribuição de Assistências por Jogo")
+        save_and_embed(fig, "Distribuição_Assistências")
+
+        # 📌 **Box Plot - Pontos, Rebotes e Assistências**
+        fig = plt.figure()
+        sns.boxplot(data=[points, rebounds, assists], palette=["blue", "orange", "red"])
+        plt.xticks([0, 1, 2], ["Pontos", "Rebotes", "Assistências"])
+        plt.title("Box Plot - Pontos, Rebotes e Assistências")
+        save_and_embed(fig, "BoxPlot")
+
+        f.write("</body></html>")
+    
+    print(f"✅ Gráficos salvos em {file_path}")
