@@ -788,7 +788,8 @@ def get_player_stats(player_id):
     """Retorna a média, mediana, moda e desvio padrão de pontos, rebotes e assistências de um jogador."""
 
     try:
-        game_logs = PlayerGameLog(player_id=player_id, season='2024-25').get_data_frames()[0]
+        game_logs = PlayerGameLog(player_id=player_id, season='2024-25', timeout=120).get_data_frames()[0]
+
 
         # Se não houver dados, retornar uma resposta vazia
         if game_logs.empty:
