@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from app.services import (
     get_teams_by_conference, get_team_rankings,
     get_team_results_both_seasons, get_team_general_stats, 
@@ -9,13 +9,20 @@ from app.services import (
     get_radar_chart_points, save_team_stats_to_csv,
     save_team_games_to_csv, save_defensive_stats_to_csv,
     save_offensive_stats_to_csv, save_graph_data_to_csv,
-    get_scatter_chart_points
-
+    get_scatter_chart_points, get_team_basic_info,
+    get_team_players_info, get_team_players_game_logs,
+    count_team_games, get_team_stats,
 )
 
 
 # Criando o Blueprint
 main = Blueprint('main', __name__)
+
+@main.route('/team/<int:team_id>/info', methods=['GET'])
+def team_info(team_id):
+    """Retorna informações gerais do time, incluindo estatísticas gerais, jogos, estatísticas defensivas, estatísticas ofensivas e gráficos."""
+    info = get_team_basic_info(team_id)
+    return jsonify(info), 200
 
 ###  RF1 
 @main.route('/teams', methods=['GET'])
@@ -117,5 +124,37 @@ def save_all_data(team_id):
 
     return jsonify({"message": f"Todos os dados do time {team_id} para as temporadas 2023-24 e 2024-25 foram salvos com sucesso!"}), 200
 
+
+### JOGADORES
+
+#RF1
+@main.route('/team/<int:team_id>/players', methods=['GET'])
+def team_players(team_id):
+    """Retorna informações dos jogadores de um time específico."""
+    players_info = get_team_players_info(team_id)
+    return jsonify(players_info), 200
+
+# RF2 & RF3
+@main.route('/team/<int:team_id>/players/games', methods=['GET'])
+def team_players_games(team_id):
+    """Retorna os dados dos jogos de todos os jogadores de um time específico durante a temporada atual."""
+    players_game_logs = get_team_players_game_logs(team_id, '2024-25')
+    return jsonify(players_game_logs), 200
+
+#RF4
+@main.route('/team/<int:team_id>/home_away_games', methods=['GET'])
+def home_away_games(team_id):
+    """Retorna a quantidade de jogos realizados dentro e fora de casa, e contra um determinado time."""
+    opponent = request.args.get('opponent')
+    season = request.args.get('season', '2024-25')
+    games_count = count_team_games(team_id, season, opponent)
+    return jsonify(games_count), 200
+
+#RF5 RF6 
+@main.route('/team/<int:team_id>/player_stats', methods=['GET'])
+def player_stats(team_id):
+    """Retorna a média, mediana e moda de pontos, rebotes e assistências dos jogadores."""
+    stats = get_team_stats(team_id)
+    return jsonify(stats), 200
 
 

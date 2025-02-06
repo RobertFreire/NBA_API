@@ -1,11 +1,18 @@
-from nba_api.stats.static import teams
-from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings, BoxScoreTraditionalV2
+from nba_api.stats.static import teams, players
+from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings, CommonTeamRoster, CommonPlayerInfo, PlayerGameLog
 from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs
+from requests.exceptions import ReadTimeout
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
+from bs4 import BeautifulSoup
 import pandas as pd
 import os
 import numpy as np
-import orjson
-from flask import Response
+import json
+from scipy import stats
+from requests.exceptions import ReadTimeout
+from functools import lru_cache
 
 DATA_DIR = os.path.join(os.getcwd(), "data")
 os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
@@ -62,6 +69,21 @@ def save_graph_data_to_csv(team_id):
     for key, data in graphs.items():
         save_to_csv(data, f"graph_{key}_{team_id}")
 
+
+def get_team_basic_info(team_id):
+    """Retorna informações básicas do time, como nome, cidade, conferência, etc."""
+    team_info = teams.find_team_name_by_id(team_id)
+    return {
+        "team_id": team_info["id"],
+        "full_name": team_info["full_name"],
+        "abbreviation": team_info["abbreviation"],
+        "nickname": team_info["nickname"],
+        "city": team_info["city"],
+        "state": team_info["state"],
+        "year_founded": team_info["year_founded"],
+    }
+
+@lru_cache(maxsize=32)
 def get_team_stats_both_seasons(team_id):
     """Obtém estatísticas do time para as temporadas 23-24 e a atual (24-25)."""
     seasons = ["2023-24", "2024-25"]
@@ -84,6 +106,7 @@ def get_team_stats_both_seasons(team_id):
 
 
 ### 🔹 RF1 - LISTA DE TIMES POR CONFERÊNCIA ###
+@lru_cache(maxsize=32)
 def get_teams_by_conference():
     """Lista os times da NBA agrupados por Conferência Leste e Oeste."""
     nba_teams = teams.get_teams()
@@ -118,6 +141,7 @@ def get_teams_by_conference():
     }
 
 ### 🔹 RF2 - CLASSIFICAÇÃO ATUAL DOS TIMES ###
+@lru_cache(maxsize=32)
 def get_team_rankings():
     """Obtém a classificação dos times por conferência."""
     from nba_api.stats.endpoints import LeagueStandings
@@ -150,7 +174,6 @@ def get_team_rankings():
 
 
 ### 🔹 RF3 - ESTATÍSTICAS DO TIME (VITÓRIAS E DERROTAS) ###
-
 def convert_numpy_types(obj):
     """Converte tipos NumPy para tipos nativos do Python antes da serialização"""
     if isinstance(obj, np.integer):
@@ -165,6 +188,7 @@ def convert_numpy_types(obj):
         return [convert_numpy_types(i) for i in obj]
     return obj
 
+@lru_cache(maxsize=32)
 def get_team_results_both_seasons(team_id):
     """Obtém estatísticas detalhadas de vitórias e derrotas do time para as temporadas 23-24 e 24-25."""
     
@@ -198,7 +222,7 @@ def get_team_results_both_seasons(team_id):
 
 
 #rf4
-
+@lru_cache(maxsize=32)
 def get_team_general_stats(team_id):
     """Obtém estatísticas gerais do time para as temporadas especificadas."""
     all_seasons_stats = {}
@@ -259,7 +283,7 @@ def get_team_general_stats(team_id):
 
 
 ##rf5
-
+@lru_cache(maxsize=32)
 def get_team_divided_stats(team_id):
     """Obtém a divisão de estatísticas de rebotes, pontos e arremessos do time para as temporadas 2023-24 e 2024-25."""
     seasons = ["2023-24", "2024-25"]
@@ -305,6 +329,7 @@ def get_team_divided_stats(team_id):
 
 
 ## rf6
+@lru_cache(maxsize=32)
 def get_team_defensive_stats(team_id):
     """Obtém estatísticas defensivas do time para as temporadas 2023-24 e 2024-25."""
     seasons = ["2023-24", "2024-25"]
@@ -342,14 +367,23 @@ def get_team_defensive_stats(team_id):
 
 
 ## rf7
-def get_team_games(team_id, season=None):
+@lru_cache(maxsize=32)
+def get_team_games(team_id, season=None, retries=3, timeout=60):
     """Obtém a lista de jogos do time para as temporadas 2023-24 e 2024-25."""
     seasons = ["2023-24", "2024-25"]
     games = {}
     
     for season in seasons:
-        team_games = TeamGameLogs(team_id_nullable=team_id, season_nullable=season)
-        df = team_games.get_data_frames()[0]  # Pegamos os dados de jogos
+        for attempt in range(retries):
+            try:
+                team_games = TeamGameLogs(team_id_nullable=team_id, season_nullable=season, timeout=timeout)
+                df = team_games.get_data_frames()[0]  # Pegamos os dados de jogos
+                break
+            except ReadTimeout:
+                if attempt < retries - 1:
+                    continue
+                else:
+                    raise
 
         selected_columns = {
             "GAME_DATE": "Data do Jogo",
@@ -390,6 +424,7 @@ def get_team_games(team_id, season=None):
 
 
 ## rf8
+@lru_cache(maxsize=32)
 def get_bar_chart_win_loss(team_id):
     """Gera os dados para um gráfico de barras empilhado de vitórias e derrotas."""
     results = get_team_results_both_seasons(team_id)["results"]
@@ -408,7 +443,7 @@ def get_bar_chart_win_loss(team_id):
 
     return data
 
-
+@lru_cache(maxsize=32)
 def get_bar_chart_home_away(team_id):
     """Gera os dados para um gráfico de barras agrupado de vitórias e derrotas em casa e fora."""
     results = get_team_results_both_seasons(team_id)["results"]
@@ -435,7 +470,7 @@ def get_bar_chart_home_away(team_id):
 
     return data
 
-
+@lru_cache(maxsize=32)
 def get_histogram_win_loss(team_id):
     """Gera os dados para um histograma de vitórias e derrotas para todas as temporadas disponíveis."""
     results = get_team_games(team_id)
@@ -462,7 +497,7 @@ def get_histogram_win_loss(team_id):
 
     return data
 
-
+@lru_cache(maxsize=32)
 def get_pie_chart_win_loss(team_id):
     """Gera os dados para um gráfico de pizza de percentual de vitórias e derrotas em casa e fora para todas as temporadas disponíveis."""
     results = get_team_results_both_seasons(team_id)["results"]
@@ -495,7 +530,7 @@ def get_pie_chart_win_loss(team_id):
 
     return data
 
-
+@lru_cache(maxsize=32)
 def get_radar_chart_points(team_id):
     """Gera os dados para um gráfico de radar mostrando a média de pontos marcados e sofridos em casa e fora para todas as temporadas disponíveis."""
     results = get_team_games(team_id)
@@ -538,7 +573,7 @@ def get_radar_chart_points(team_id):
 
     return data
 
-
+@lru_cache(maxsize=32)
 def get_line_chart_win_streak(team_id):
     """Gera os dados para um gráfico de linhas mostrando a sequência de vitórias e derrotas ao longo da temporada."""
     results = get_team_games(team_id)
@@ -581,3 +616,210 @@ def get_scatter_chart_points(team_id):
     return data
 
 
+##JOGADORES
+@lru_cache(maxsize=32)
+def fetch_age_and_salary(player_name, team_abbreviation, team_name_formatted):
+    url = f"https://www.espn.com/nba/team/roster/_/name/{team_abbreviation}/{team_name_formatted}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    rows = soup.find_all('tr', class_='Table__TR')
+
+    for row in rows:
+        cols = row.find_all('td')
+        if len(cols) > 0 and player_name in cols[1].text:
+            age = cols[3].text.strip()
+            salary = cols[7].text.strip()
+            return age, salary
+
+    return None, None
+
+
+@lru_cache(maxsize=32)
+def get_player_info(player_id):
+    """Retorna informações básicas do jogador, como nome, altura, peso, idade, experiência, posição, universidade e salário."""
+    player_info = CommonPlayerInfo(player_id=player_id).get_data_frames()[0]
+    player_data = player_info.iloc[0]
+
+    team_id = player_data["TEAM_ID"]
+    team_info = teams.find_team_name_by_id(team_id)
+    team_name = team_info["full_name"]
+    team_abbreviation = team_info["abbreviation"].lower()
+    team_name_formatted = team_name.replace(' ', '-').lower()
+
+    age, salary = fetch_age_and_salary(player_data["DISPLAY_FIRST_LAST"], team_abbreviation, team_name_formatted)
+
+    player_data = {
+        "id": player_data["PERSON_ID"],
+        "name": player_data["DISPLAY_FIRST_LAST"],
+        "height": player_data["HEIGHT"],
+        "weight": player_data["WEIGHT"],
+        "age": age,
+        "experience": player_data["SEASON_EXP"] if player_data["SEASON_EXP"] != "R" else 0,
+        "position": player_data["POSITION"],
+        "college": player_data["SCHOOL"],
+        "salary": salary
+    }
+
+    return player_data
+    
+@lru_cache(maxsize=32)
+def get_team_players_info(team_id, retries=3, timeout=60):
+    """Obtém informações dos jogadores de um time específico."""
+    for attempt in range(retries):
+        try:
+            roster = CommonTeamRoster(team_id=team_id, timeout=timeout).get_data_frames()[0]
+            players_info = []
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(get_player_info, player["PLAYER_ID"]): player for _, player in roster.iterrows()}
+                for future in as_completed(futures):
+                    player_info = future.result()
+                    players_info.append(convert_numpy_types(player_info))
+
+            return players_info
+        except ReadTimeout:
+            if attempt < retries - 1:
+                continue
+            else:
+                raise
+
+lru_cache(maxsize=32)
+def get_player_game_logs(player_id, season='2024-25'):
+    """Obtém os dados dos jogos de um jogador para a temporada especificada."""
+    try:
+        response = PlayerGameLog(player_id=player_id, season=season).get_data_frames()
+        if not response:
+            raise ValueError("Resposta da API está vazia")
+        
+        game_logs = response[0]
+
+        game_logs = game_logs.rename(columns={
+            'GAME_DATE': 'Data do Jogo',
+            'MATCHUP': 'Adversário',
+            'WL': 'V ou D',
+            'PTS': 'PTS',
+            'REB': 'REB',
+            'AST': 'AST',
+            'FG3A': 'Tentativas de Cestas de 3',
+            'FG3M': 'Cestas de 3 PTS Marcados',
+            'MIN': 'Tempo de Permanência do Jogador em Quadra'
+        })
+
+        game_logs['Casa/Fora'] = game_logs['Adversário'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
+        game_logs['Adversário'] = game_logs['Adversário'].apply(lambda x: x.split()[-1])
+        game_logs['Placar do Jogo'] = game_logs.apply(lambda row: f"{row['PTS']} - {row['PTS'] + row['PLUS_MINUS']}", axis=1)
+
+        return game_logs.to_dict(orient='records')
+    except (requests.exceptions.RequestException, json.JSONDecodeError, ValueError) as e:
+        print(f"Erro ao obter dados do jogador {player_id}: {e}")
+        return []
+
+def get_team_players_game_logs(team_id, season='2024-25'):
+    """Obtém os dados dos jogos de todos os jogadores de um time específico para a temporada especificada."""
+    try:
+        roster = CommonTeamRoster(team_id=team_id).get_data_frames()[0]
+        players_game_logs = []
+
+        for _, player in roster.iterrows():
+            player_id = player['PLAYER_ID']
+            player_name = player['PLAYER']
+            
+            player_game_log = PlayerGameLog(player_id=player_id, season=season).get_data_frames()
+            
+            if player_game_log:
+                game_logs = player_game_log[0]
+                
+                game_logs = game_logs.rename(columns={
+                    'GAME_DATE': 'Data do Jogo',
+                    'MATCHUP': 'Adversário',
+                    'WL': 'V ou D',
+                    'PTS': 'PTS',
+                    'REB': 'REB',
+                    'AST': 'AST',
+                    'FG3A': 'Tentativas de Cestas de 3',
+                    'FG3M': 'Cestas de 3 PTS Marcados',
+                    'MIN': 'Tempo de Permanência do Jogador em Quadra'
+                })
+
+                game_logs['Casa/Fora'] = game_logs['Adversário'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
+
+                game_logs['Adversário'] = game_logs['Adversário'].apply(lambda x: x.split()[-1])
+
+                if 'PLUS_MINUS' in game_logs.columns:
+                    game_logs['Placar do Jogo'] = game_logs.apply(lambda row: f"{row['PTS']} - {row['PTS'] + row['PLUS_MINUS']}", axis=1)
+                else:
+                    game_logs['Placar do Jogo'] = game_logs.apply(lambda row: f"{row['PTS']} - {row['PTS']}", axis=1)
+
+                # Adiciona os logs do jogador à lista com player_id e player_name
+                players_game_logs.append({
+                    'player_id': player_id,
+                    'player_name': player_name,
+                    'game_logs': game_logs.to_dict(orient='records')
+                })
+
+        return players_game_logs
+    except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+        print(f"Erro ao obter dados do time {team_id}: {e}")
+        return []
+
+    
+def count_team_games(team_id, season='2024-25', opponent_team_abbr=None):
+    """Conta a quantidade de jogos dentro e fora de casa de um time e contra um adversário específico."""
+
+    team_games = TeamGameLog(team_id=team_id, season=season).get_data_frames()[0]
+
+    team_games['Casa/Fora'] = team_games['MATCHUP'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
+
+    total_home_games = team_games[team_games['Casa/Fora'] == 'Casa'].shape[0]
+    total_away_games = team_games[team_games['Casa/Fora'] == 'Fora'].shape[0]
+
+    if opponent_team_abbr:
+        games_against_opponent = team_games[team_games['MATCHUP'].str.contains(opponent_team_abbr, case=False)]
+        home_vs_opponent = games_against_opponent[games_against_opponent['Casa/Fora'] == 'Casa'].shape[0]
+        away_vs_opponent = games_against_opponent[games_against_opponent['Casa/Fora'] == 'Fora'].shape[0]
+    else:
+        home_vs_opponent = away_vs_opponent = 0
+
+    return {
+        "total_home_games": total_home_games,
+        "total_away_games": total_away_games,
+        "home_vs_opponent": home_vs_opponent,
+        "away_vs_opponent": away_vs_opponent
+    }
+
+def get_team_stats(team_id):
+    
+    game_logs = TeamGameLog(team_id=team_id, season='2024-25').get_data_frames()[0]
+    
+    game_logs = game_logs[['MATCHUP', 'PTS', 'REB', 'AST']]
+    
+    game_logs['Casa/Fora'] = game_logs['MATCHUP'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
+    
+    if game_logs.empty:
+        return 
+    
+    pts = game_logs['PTS'].tolist()
+    reb = game_logs['REB'].tolist()
+    ast = game_logs['AST'].tolist()
+    
+    avg_pts, avg_reb, avg_ast = np.mean(pts), np.mean(reb), np.mean(ast)
+    median_pts, median_reb, median_ast = np.median(pts), np.median(reb), np.median(ast)
+    mode_pts, count_pts = stats.mode(pts, keepdims=True)
+    mode_reb, count_reb = stats.mode(reb, keepdims=True)
+    mode_ast, count_ast = stats.mode(ast, keepdims=True)
+    
+    stats_data = {
+        "average": {"points": avg_pts, "rebounds": avg_reb, "assists": avg_ast},
+        "median": {"points": median_pts, "rebounds": median_reb, "assists": median_ast},
+        "mode": {
+            "points": {"value": mode_pts[0], "frequency": count_pts[0]},
+            "rebounds": {"value": mode_reb[0], "frequency": count_reb[0]},
+            "assists": {"value": mode_ast[0], "frequency": count_ast[0]}
+        }
+    }
+    
+    return stats_data
