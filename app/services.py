@@ -14,6 +14,7 @@ from scipy import stats
 from requests.exceptions import ReadTimeout
 from functools import lru_cache
 import time
+import csv
 
 DATA_DIR = os.path.join(os.getcwd(), "data")
 os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
@@ -911,3 +912,58 @@ def get_player_season_vs_career(player_id):
 
     except Exception as e:
         return {"player_id": player_id, "error": f"Erro ao obter comparação de estatísticas: {str(e)}"}
+    
+
+
+def save_player_stats_to_csv(player_id):
+    """Salva as estatísticas de comparação entre temporada e carreira do jogador em um arquivo CSV."""
+    stats = get_player_season_vs_career(player_id)
+
+    if "error" in stats:
+        print(f"Erro ao salvar estatísticas do jogador {player_id}: {stats['error']}")
+        return
+
+    file_path = os.path.join(DATA_DIR, f"player_stats_{player_id}.csv")
+
+    with open(file_path, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        
+        # Cabeçalhos
+        writer.writerow(["Player ID", "Total Games (Season)", "Avg Points (Season)", "Avg Assists (Season)", "Avg Rebounds (Season)", "Total Minutes (Season)",
+                         "Total Games (Career)", "Avg Points (Career)", "Avg Assists (Career)", "Avg Rebounds (Career)", "Total Minutes (Career)"])
+
+        # Dados
+        writer.writerow([
+            stats["player_id"],
+            stats["season"]["total_games"], stats["season"]["average_points"], stats["season"]["average_assists"], stats["season"]["average_rebounds"], stats["season"]["total_minutes"],
+            stats["career"]["total_games"], stats["career"]["average_points"], stats["career"]["average_assists"], stats["career"]["average_rebounds"], stats["career"]["total_minutes"]
+        ])
+    
+    print(f"✅ Estatísticas do jogador {player_id} salvas em {file_path}")
+
+def save_player_games_to_csv(player_id):
+    """Salva o histórico de jogos do jogador em CSV."""
+    games = get_player_game_logs(player_id)
+
+    if not games or player_id not in games:
+        print(f"Erro ao salvar jogos do jogador {player_id}: Nenhum dado encontrado.")
+        return
+
+    file_path = os.path.join(DATA_DIR, f"player_games_{player_id}.csv")
+
+    with open(file_path, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Cabeçalhos
+        writer.writerow(["Data do Jogo", "Adversário", "V ou D", "Casa/Fora", "PTS", "REB", "AST", "Tentativas de Cestas de 3", "Cestas de 3 PTS Marcados", "Tempo de Quadra", "Placar do Jogo"])
+
+        # Dados
+        for game in games[player_id]:
+            writer.writerow([
+                game["Data do Jogo"], game["Adversário"], game["V ou D"], game["Casa/Fora"],
+                game["Pontos"], game["Rebotes"], game["Assistências"],
+                game.get("Tentativas de Cestas de 3", "N/A"), game.get("Cestas de 3 PTS Marcados", "N/A"),
+                game["Tempo de Permanência do Jogador em Quadra"], game["Placar do Jogo"]
+            ])
+    
+    print(f"✅ Jogos do jogador {player_id} salvos em {file_path}")
