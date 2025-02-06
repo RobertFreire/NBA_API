@@ -13,6 +13,7 @@ import json
 from scipy import stats
 from requests.exceptions import ReadTimeout
 from functools import lru_cache
+import time
 
 DATA_DIR = os.path.join(os.getcwd(), "data")
 os.makedirs(DATA_DIR, exist_ok=True)  # Criar o diretório caso não exista
@@ -689,55 +690,66 @@ def get_team_players_info(team_id, retries=3, timeout=60):
                 raise
 
 lru_cache(maxsize=32)
-def get_player_game_logs(teamId, season='2024-25'):
-    """Obtém os dados dos jogos de um jogador para a temporada especificada."""
-    player_ids = CommonTeamRoster(team_id=teamId, season=season).get_data_frames()[0]['PLAYER_ID']
-    players_game_logs = {}
-
-    for player_id in player_ids:
-        try:
-            response = PlayerGameLog(player_id=player_id, season=season).get_data_frames()
-            if not response:
-                raise ValueError("Resposta da API está vazia")
-            
-            game_logs = response[0]
-
-            game_logs = game_logs.rename(columns={
-                'GAME_DATE': 'Data do Jogo',
-                'MATCHUP': 'Adversário',
-                'WL': 'V ou D',
-                'PTS': 'PTS',
-                'REB': 'REB',
-                'AST': 'AST',
-                'FG3A': 'Tentativas de Cestas de 3',
-                'FG3M': 'Cestas de 3 PTS Marcados',
-                'MIN': 'Tempo de Permanência do Jogador em Quadra'
-            })
-
-            game_logs['Casa/Fora'] = game_logs['Adversário'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
-            game_logs['Adversário'] = game_logs['Adversário'].apply(lambda x: x.split()[-1])
-            game_logs['Placar do Jogo'] = game_logs.apply(lambda row: get_game_score(row['Game_ID']), axis=1)
-
-            players_game_logs[player_id] = game_logs[[
-                'Data do Jogo', 'Adversário', 'V ou D', 'Casa/Fora', 'PTS', 'REB', 'AST',
-                'Tentativas de Cestas de 3', 'Cestas de 3 PTS Marcados', 'Tempo de Permanência do Jogador em Quadra', 'Placar do Jogo'
-            ]].to_dict(orient='records')
-        except (requests.exceptions.RequestException, json.JSONDecodeError, ValueError) as e:
-            print(f"Erro ao obter dados do jogador {player_id}: {e}")
-            players_game_logs[player_id] = []
-
-    return players_game_logs
-
-def get_game_score(game_id):
-    """Obtém o placar do jogo usando o ID do jogo."""
+def get_player_game_logs(teamId, season="2024-25"):
+    """Obtém os dados dos jogos de todos os jogadores de um time para a temporada especificada."""
     try:
-        box_score = BoxScoreTraditionalV2(game_id=game_id, timeout=60).get_data_frames()[0]  # Timeout aumentado para 60 segundos
-        team_scores = box_score.groupby('TEAM_ID')['PTS'].sum()
-        return f"{team_scores.iloc[0]} - {team_scores.iloc[1]}"
-    except Exception as e:
-        print(f"Erro ao obter o placar do jogo {game_id}: {e}")
-        return "N/A"
+        roster_df = CommonTeamRoster(team_id=teamId, season=season).get_data_frames()[0]
+        if roster_df.empty:
+            return {"error": "Nenhum jogador encontrado para esse time."}
 
+        player_ids = roster_df["PLAYER_ID"].tolist()
+        players_game_logs = {}
+
+        for player_id in player_ids:
+            try:
+                response = PlayerGameLog(player_id=player_id, season=season, timeout=30).get_data_frames()
+                if not response or response[0].empty:
+                    print(f"Nenhum jogo encontrado para o jogador {player_id}. Pulando.")
+                    continue
+
+                game_logs = response[0]
+                game_logs = game_logs.rename(columns={
+                    "GAME_DATE": "Data do Jogo",
+                    "MATCHUP": "Adversário",
+                    "WL": "V ou D",
+                    "PTS": "Pontos",
+                    "REB": "Rebotes",
+                    "AST": "Assistências",
+                })
+
+                game_logs["Casa/Fora"] = game_logs["Adversário"].apply(lambda x: "Casa" if "vs." in x else "Fora")
+                game_logs["Adversário"] = game_logs["Adversário"].apply(lambda x: x.split()[-1])
+
+                players_game_logs[player_id] = game_logs[[
+                    "Data do Jogo", "Adversário", "V ou D", "Casa/Fora", "Pontos", "Rebotes", "Assistências"
+                ]].to_dict(orient="records")
+
+            except requests.exceptions.ReadTimeout:
+                print(f"Timeout ao buscar dados do jogador {player_id}. Pulando.")
+            except Exception as e:
+                print(f"Erro ao obter dados do jogador {player_id}: {e}")
+
+        return players_game_logs
+
+    except Exception as e:
+        return {"error": f"Erro ao obter jogadores do time {teamId}: {e}"}
+
+
+def get_game_score(game_id, retries=3, timeout=60):
+    """Obtém o placar do jogo usando o ID do jogo, com tentativas extras."""
+    for attempt in range(retries):
+        try:
+            box_score = BoxScoreTraditionalV2(game_id=game_id, timeout=timeout).get_data_frames()[0]
+            team_scores = box_score.groupby('TEAM_ID')['PTS'].sum()
+            return f"{team_scores.iloc[0]} - {team_scores.iloc[1]}"
+        except requests.exceptions.ReadTimeout:
+            print(f"Tentativa {attempt + 1}/{retries}: Timeout ao buscar placar do jogo {game_id}. Tentando novamente...")
+            time.sleep(5)  # Espera 5 segundos antes de tentar novamente
+        except Exception as e:
+            print(f"Erro ao obter o placar do jogo {game_id}: {e}")
+            return "N/A"
+
+    return "Timeout: API da NBA não respondeu"
 
     
 def count_team_games(team_id, season='2024-25', opponent_team_abbr=None):
