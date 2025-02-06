@@ -825,6 +825,30 @@ def get_player_stats(player_id):
         return {"player_id": player_id, "error": f"Erro ao obter estatísticas: {str(e)}"}
 
 
-## parte 2 inicio:
+@lru_cache(maxsize=32)
+def get_player_career_stats(player_id):
+    """Obtém as estatísticas totais da carreira de um jogador (pontos, assistências e rebotes)."""
+    try:
+        career_stats = PlayerCareerStats(player_id=player_id).get_data_frames()[0]
 
+        # Se não houver dados, retorna erro
+        if career_stats.empty:
+            return {"player_id": player_id, "error": "Nenhum dado encontrado para a carreira do jogador."}
+
+        # Somando os totais de pontos, assistências e rebotes na carreira
+        total_points = int(career_stats["PTS"].sum())
+        total_assists = int(career_stats["AST"].sum())
+        total_rebounds = int(career_stats["REB"].sum())
+
+        return {
+            "player_id": player_id,
+            "career": {
+                "total_points": total_points,
+                "total_assists": total_assists,
+                "total_rebounds": total_rebounds
+            }
+        }
+    
+    except Exception as e:
+        return {"player_id": player_id, "error": f"Erro ao obter estatísticas de carreira: {str(e)}"}
 

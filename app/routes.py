@@ -12,7 +12,7 @@ from app.services import (
     save_offensive_stats_to_csv, save_graph_data_to_csv,
     get_scatter_chart_points, get_team_basic_info,
     get_team_players_info, get_player_game_logs,
-    count_team_games, get_player_stats,
+    count_team_games, get_player_stats, get_player_career_stats
 )
 
 
@@ -164,10 +164,7 @@ def team_player_stats(team_id):
 
 
 
-## ------fim - parte 1------
 
-
-## ------ parte 2 ------
 
 @main.route('/player/<int:player_id>/stats', methods=['GET'])
 def player_stats(player_id):
@@ -175,3 +172,9 @@ def player_stats(player_id):
     stats = get_player_stats(player_id)
     return jsonify(stats), 200
 
+
+@main.route('/player/<int:player_id>/career_stats', methods=['GET'])
+def player_career_stats(player_id):
+    """Retorna os totais de pontos, assistências e rebotes da carreira do jogador."""
+    stats = get_player_career_stats(player_id)
+    return jsonify(stats), 200
