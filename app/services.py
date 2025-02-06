@@ -673,23 +673,28 @@ def get_player_info(player_id):
 @lru_cache(maxsize=32)
 def get_team_players_info(team_id, retries=3, timeout=60):
     """Obtém informações dos jogadores de um time específico."""
+    from nba_api.stats.endpoints import CommonTeamRoster
+
     for attempt in range(retries):
         try:
             roster = CommonTeamRoster(team_id=team_id, timeout=timeout).get_data_frames()[0]
             players_info = []
 
-            with ThreadPoolExecutor(max_workers=10) as executor:
+            # 🔹 Reduzimos o número de threads para evitar sobrecarga
+            with ThreadPoolExecutor(max_workers=3) as executor:  
                 futures = {executor.submit(get_player_info, player["PLAYER_ID"]): player for _, player in roster.iterrows()}
                 for future in as_completed(futures):
                     player_info = future.result()
                     player_info['image_url'] = f"https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/{player_info['id']}.png"
-                    players_info.append(convert_numpy_types(player_info))
+                    players_info.append(player_info)
 
             return players_info
         except ReadTimeout:
             if attempt < retries - 1:
+                print(f"🔁 Tentando novamente... ({attempt + 1}/{retries})")
                 continue
             else:
+                print(f"🚨 Timeout ao buscar informações do time {team_id}.")
                 raise
 
 lru_cache(maxsize=32)
@@ -1040,3 +1045,4 @@ def save_performance_graphs(player_id):
         f.write("</body></html>")
     
     print(f"✅ Gráficos salvos em {file_path}")
+
