@@ -1,6 +1,6 @@
 from nba_api.stats.static import teams, players
 from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, BoxScoreTraditionalV2, CommonTeamRoster, CommonPlayerInfo, PlayerGameLog
-from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs, TeamDetails
+from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs, TeamDetails, PlayerCareerStats
 from requests.exceptions import ReadTimeout
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
