@@ -764,45 +764,54 @@ def count_team_games(team_id, season='2024-25', opponent_team_abbr=None):
     }
 
 def get_player_stats(player_id):
-    """Retorna a média, mediana, moda e outras estatísticas de um jogador específico."""
-    
-    game_logs = PlayerGameLog(player_id=player_id, season='2024-25').get_data_frames()[0]
-    
-    # Filtrando as colunas relevantes
-    game_logs = game_logs[['MATCHUP', 'PTS', 'REB', 'AST']]
-    
-    # Identificando se é jogo em casa ou fora
-    game_logs['Casa/Fora'] = game_logs['MATCHUP'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
-    
-    if game_logs.empty:
-        return 
-    
-    # Extraindo as estatísticas individuais
-    pts = game_logs['PTS'].tolist()
-    reb = game_logs['REB'].tolist()
-    ast = game_logs['AST'].tolist()
-    
-    # Calculando as métricas
-    avg_pts = np.mean(pts)
-    avg_reb = np.mean(reb)
-    avg_ast = np.mean(ast)
-    
-    median_pts = np.median(pts)
-    median_reb = np.median(reb)
-    median_ast = np.median(ast)
-    
-    mode_pts, count_pts = stats.mode(pts, keepdims=True)
-    mode_reb, count_reb = stats.mode(reb, keepdims=True)
-    mode_ast, count_ast = stats.mode(ast, keepdims=True)
-    
-    stats_data = {
-        "average": {"points": avg_pts, "rebounds": avg_reb, "assists": avg_ast},
-        "median": {"points": median_pts, "rebounds": median_reb, "assists": median_ast},
-        "mode": {
-            "points": {"value": mode_pts[0], "frequency": count_pts[0]},
-            "rebounds": {"value": mode_reb[0], "frequency": count_reb[0]},
-            "assists": {"value": mode_ast[0], "frequency": count_ast[0]}
+    """Retorna a média, mediana, moda e desvio padrão de pontos, rebotes e assistências de um jogador."""
+
+    try:
+        game_logs = PlayerGameLog(player_id=player_id, season='2024-25').get_data_frames()[0]
+
+        # Se não houver dados, retornar uma resposta vazia
+        if game_logs.empty:
+            return {"player_id": player_id, "error": "Nenhum dado encontrado para o jogador."}
+
+        # Selecionando apenas as colunas necessárias
+        game_logs = game_logs[['MATCHUP', 'PTS', 'REB', 'AST']]
+
+        # Convertendo os dados para listas
+        pts = game_logs['PTS'].astype(float).tolist()
+        reb = game_logs['REB'].astype(float).tolist()
+        ast = game_logs['AST'].astype(float).tolist()
+
+        # Calculando estatísticas
+        stats_data = {
+            "player_id": int(player_id),
+            "average": {
+                "points": round(float(np.mean(pts)), 2),
+                "rebounds": round(float(np.mean(reb)), 2),
+                "assists": round(float(np.mean(ast)), 2)
+            },
+            "median": {
+                "points": float(np.median(pts)),
+                "rebounds": float(np.median(reb)),
+                "assists": float(np.median(ast))
+            },
+            "mode": {
+                "points": float(stats.mode(pts, keepdims=True)[0][0]) if pts else None,
+                "rebounds": float(stats.mode(reb, keepdims=True)[0][0]) if reb else None,
+                "assists": float(stats.mode(ast, keepdims=True)[0][0]) if ast else None
+            },
+            "standard_deviation": {
+                "points": round(float(np.std(pts, ddof=1)), 2) if len(pts) > 1 else None,
+                "rebounds": round(float(np.std(reb, ddof=1)), 2) if len(reb) > 1 else None,
+                "assists": round(float(np.std(ast, ddof=1)), 2) if len(ast) > 1 else None
+            }
         }
-    }
-    
-    return stats_data
+
+        return stats_data
+
+    except Exception as e:
+        return {"player_id": player_id, "error": f"Erro ao obter estatísticas: {str(e)}"}
+
+
+## parte 2 inicio:
+
+

@@ -25,6 +25,8 @@ def team_info(team_id):
     info = get_team_basic_info(team_id)
     return jsonify(info), 200
 
+## ------parte 1------ 
+
 ###  RF1 
 @main.route('/teams', methods=['GET'])
 def list_teams():
@@ -155,11 +157,21 @@ def home_away_games(team_id):
 
 #RF5 RF6 RF7
 @main.route('/team/<int:team_id>/player_stats', methods=['GET'])
-def player_stats(team_id):
+def team_player_stats(team_id):
     """Retorna a média, mediana e moda de pontos, rebotes e assistências dos jogadores."""
     stats = get_player_stats(team_id)
     return jsonify(stats), 200
 
 
 
+## ------fim - parte 1------
+
+
+## ------ parte 2 ------
+
+@main.route('/player/<int:player_id>/stats', methods=['GET'])
+def player_stats(player_id):
+    """Retorna a média, mediana, moda e desvio padrão de pontos, rebotes e assistências de um jogador específico."""
+    stats = get_player_stats(player_id)
+    return jsonify(stats), 200
 
