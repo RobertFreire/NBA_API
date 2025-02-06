@@ -731,12 +731,13 @@ def get_player_game_logs(teamId, season='2024-25'):
 def get_game_score(game_id):
     """Obtém o placar do jogo usando o ID do jogo."""
     try:
-        box_score = BoxScoreTraditionalV2(game_id=game_id).get_data_frames()[0]
+        box_score = BoxScoreTraditionalV2(game_id=game_id, timeout=60).get_data_frames()[0]  # Timeout aumentado para 60 segundos
         team_scores = box_score.groupby('TEAM_ID')['PTS'].sum()
         return f"{team_scores.iloc[0]} - {team_scores.iloc[1]}"
     except Exception as e:
         print(f"Erro ao obter o placar do jogo {game_id}: {e}")
         return "N/A"
+
 
     
 def count_team_games(team_id, season='2024-25', opponent_team_abbr=None):
