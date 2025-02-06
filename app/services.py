@@ -1,6 +1,6 @@
 from nba_api.stats.static import teams, players
-from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, LeagueStandings, CommonTeamRoster, CommonPlayerInfo, PlayerGameLog
-from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs
+from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, BoxScoreTraditionalV2, CommonTeamRoster, CommonPlayerInfo, PlayerGameLog
+from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs, TeamDetails
 from requests.exceptions import ReadTimeout
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -678,6 +678,7 @@ def get_team_players_info(team_id, retries=3, timeout=60):
                 futures = {executor.submit(get_player_info, player["PLAYER_ID"]): player for _, player in roster.iterrows()}
                 for future in as_completed(futures):
                     player_info = future.result()
+                    player_info['image_url'] = f"https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/{player_info['id']}.png"
                     players_info.append(convert_numpy_types(player_info))
 
             return players_info
@@ -688,83 +689,54 @@ def get_team_players_info(team_id, retries=3, timeout=60):
                 raise
 
 lru_cache(maxsize=32)
-def get_player_game_logs(player_id, season='2024-25'):
+def get_player_game_logs(teamId, season='2024-25'):
     """Obtém os dados dos jogos de um jogador para a temporada especificada."""
-    try:
-        response = PlayerGameLog(player_id=player_id, season=season).get_data_frames()
-        if not response:
-            raise ValueError("Resposta da API está vazia")
-        
-        game_logs = response[0]
+    player_ids = CommonTeamRoster(team_id=teamId, season=season).get_data_frames()[0]['PLAYER_ID']
+    players_game_logs = {}
 
-        game_logs = game_logs.rename(columns={
-            'GAME_DATE': 'Data do Jogo',
-            'MATCHUP': 'Adversário',
-            'WL': 'V ou D',
-            'PTS': 'PTS',
-            'REB': 'REB',
-            'AST': 'AST',
-            'FG3A': 'Tentativas de Cestas de 3',
-            'FG3M': 'Cestas de 3 PTS Marcados',
-            'MIN': 'Tempo de Permanência do Jogador em Quadra'
-        })
-
-        game_logs['Casa/Fora'] = game_logs['Adversário'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
-        game_logs['Adversário'] = game_logs['Adversário'].apply(lambda x: x.split()[-1])
-        game_logs['Placar do Jogo'] = game_logs.apply(lambda row: f"{row['PTS']} - {row['PTS'] + row['PLUS_MINUS']}", axis=1)
-
-        return game_logs.to_dict(orient='records')
-    except (requests.exceptions.RequestException, json.JSONDecodeError, ValueError) as e:
-        print(f"Erro ao obter dados do jogador {player_id}: {e}")
-        return []
-
-def get_team_players_game_logs(team_id, season='2024-25'):
-    """Obtém os dados dos jogos de todos os jogadores de um time específico para a temporada especificada."""
-    try:
-        roster = CommonTeamRoster(team_id=team_id).get_data_frames()[0]
-        players_game_logs = []
-
-        for _, player in roster.iterrows():
-            player_id = player['PLAYER_ID']
-            player_name = player['PLAYER']
+    for player_id in player_ids:
+        try:
+            response = PlayerGameLog(player_id=player_id, season=season).get_data_frames()
+            if not response:
+                raise ValueError("Resposta da API está vazia")
             
-            player_game_log = PlayerGameLog(player_id=player_id, season=season).get_data_frames()
-            
-            if player_game_log:
-                game_logs = player_game_log[0]
-                
-                game_logs = game_logs.rename(columns={
-                    'GAME_DATE': 'Data do Jogo',
-                    'MATCHUP': 'Adversário',
-                    'WL': 'V ou D',
-                    'PTS': 'PTS',
-                    'REB': 'REB',
-                    'AST': 'AST',
-                    'FG3A': 'Tentativas de Cestas de 3',
-                    'FG3M': 'Cestas de 3 PTS Marcados',
-                    'MIN': 'Tempo de Permanência do Jogador em Quadra'
-                })
+            game_logs = response[0]
 
-                game_logs['Casa/Fora'] = game_logs['Adversário'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
+            game_logs = game_logs.rename(columns={
+                'GAME_DATE': 'Data do Jogo',
+                'MATCHUP': 'Adversário',
+                'WL': 'V ou D',
+                'PTS': 'PTS',
+                'REB': 'REB',
+                'AST': 'AST',
+                'FG3A': 'Tentativas de Cestas de 3',
+                'FG3M': 'Cestas de 3 PTS Marcados',
+                'MIN': 'Tempo de Permanência do Jogador em Quadra'
+            })
 
-                game_logs['Adversário'] = game_logs['Adversário'].apply(lambda x: x.split()[-1])
+            game_logs['Casa/Fora'] = game_logs['Adversário'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
+            game_logs['Adversário'] = game_logs['Adversário'].apply(lambda x: x.split()[-1])
+            game_logs['Placar do Jogo'] = game_logs.apply(lambda row: get_game_score(row['Game_ID']), axis=1)
 
-                if 'PLUS_MINUS' in game_logs.columns:
-                    game_logs['Placar do Jogo'] = game_logs.apply(lambda row: f"{row['PTS']} - {row['PTS'] + row['PLUS_MINUS']}", axis=1)
-                else:
-                    game_logs['Placar do Jogo'] = game_logs.apply(lambda row: f"{row['PTS']} - {row['PTS']}", axis=1)
+            players_game_logs[player_id] = game_logs[[
+                'Data do Jogo', 'Adversário', 'V ou D', 'Casa/Fora', 'PTS', 'REB', 'AST',
+                'Tentativas de Cestas de 3', 'Cestas de 3 PTS Marcados', 'Tempo de Permanência do Jogador em Quadra', 'Placar do Jogo'
+            ]].to_dict(orient='records')
+        except (requests.exceptions.RequestException, json.JSONDecodeError, ValueError) as e:
+            print(f"Erro ao obter dados do jogador {player_id}: {e}")
+            players_game_logs[player_id] = []
 
-                # Adiciona os logs do jogador à lista com player_id e player_name
-                players_game_logs.append({
-                    'player_id': player_id,
-                    'player_name': player_name,
-                    'game_logs': game_logs.to_dict(orient='records')
-                })
+    return players_game_logs
 
-        return players_game_logs
-    except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-        print(f"Erro ao obter dados do time {team_id}: {e}")
-        return []
+def get_game_score(game_id):
+    """Obtém o placar do jogo usando o ID do jogo."""
+    try:
+        box_score = BoxScoreTraditionalV2(game_id=game_id).get_data_frames()[0]
+        team_scores = box_score.groupby('TEAM_ID')['PTS'].sum()
+        return f"{team_scores.iloc[0]} - {team_scores.iloc[1]}"
+    except Exception as e:
+        print(f"Erro ao obter o placar do jogo {game_id}: {e}")
+        return "N/A"
 
     
 def count_team_games(team_id, season='2024-25', opponent_team_abbr=None):
@@ -791,23 +763,34 @@ def count_team_games(team_id, season='2024-25', opponent_team_abbr=None):
         "away_vs_opponent": away_vs_opponent
     }
 
-def get_team_stats(team_id):
+def get_player_stats(player_id):
+    """Retorna a média, mediana, moda e outras estatísticas de um jogador específico."""
     
-    game_logs = TeamGameLog(team_id=team_id, season='2024-25').get_data_frames()[0]
+    game_logs = PlayerGameLog(player_id=player_id, season='2024-25').get_data_frames()[0]
     
+    # Filtrando as colunas relevantes
     game_logs = game_logs[['MATCHUP', 'PTS', 'REB', 'AST']]
     
+    # Identificando se é jogo em casa ou fora
     game_logs['Casa/Fora'] = game_logs['MATCHUP'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
     
     if game_logs.empty:
         return 
     
+    # Extraindo as estatísticas individuais
     pts = game_logs['PTS'].tolist()
     reb = game_logs['REB'].tolist()
     ast = game_logs['AST'].tolist()
     
-    avg_pts, avg_reb, avg_ast = np.mean(pts), np.mean(reb), np.mean(ast)
-    median_pts, median_reb, median_ast = np.median(pts), np.median(reb), np.median(ast)
+    # Calculando as métricas
+    avg_pts = np.mean(pts)
+    avg_reb = np.mean(reb)
+    avg_ast = np.mean(ast)
+    
+    median_pts = np.median(pts)
+    median_reb = np.median(reb)
+    median_ast = np.median(ast)
+    
     mode_pts, count_pts = stats.mode(pts, keepdims=True)
     mode_reb, count_reb = stats.mode(reb, keepdims=True)
     mode_ast, count_ast = stats.mode(ast, keepdims=True)

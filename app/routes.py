@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+import asyncio
 from app.services import (
     get_teams_by_conference, get_team_rankings,
     get_team_results_both_seasons, get_team_general_stats, 
@@ -10,8 +11,8 @@ from app.services import (
     save_team_games_to_csv, save_defensive_stats_to_csv,
     save_offensive_stats_to_csv, save_graph_data_to_csv,
     get_scatter_chart_points, get_team_basic_info,
-    get_team_players_info, get_team_players_game_logs,
-    count_team_games, get_team_stats,
+    get_team_players_info, get_player_game_logs,
+    count_team_games, get_player_stats,
 )
 
 
@@ -138,7 +139,9 @@ def team_players(team_id):
 @main.route('/team/<int:team_id>/players/games', methods=['GET'])
 def team_players_games(team_id):
     """Retorna os dados dos jogos de todos os jogadores de um time específico durante a temporada atual."""
-    players_game_logs = get_team_players_game_logs(team_id, '2024-25')
+    
+    players_game_logs = get_player_game_logs(team_id, '2024-25')
+    
     return jsonify(players_game_logs), 200
 
 #RF4
@@ -150,11 +153,13 @@ def home_away_games(team_id):
     games_count = count_team_games(team_id, season, opponent)
     return jsonify(games_count), 200
 
-#RF5 RF6 
+#RF5 RF6 RF7
 @main.route('/team/<int:team_id>/player_stats', methods=['GET'])
 def player_stats(team_id):
     """Retorna a média, mediana e moda de pontos, rebotes e assistências dos jogadores."""
-    stats = get_team_stats(team_id)
+    stats = get_player_stats(team_id)
     return jsonify(stats), 200
+
+
 
 
