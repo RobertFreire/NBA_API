@@ -1,6 +1,6 @@
 from nba_api.stats.static import teams, players
 from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, BoxScoreTraditionalV2, CommonTeamRoster, CommonPlayerInfo, PlayerGameLog
-from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs, TeamDetails, PlayerCareerStats
+from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs, TeamDetails, PlayerCareerStats, PlayerGameLog
 from requests.exceptions import ReadTimeout
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -852,3 +852,62 @@ def get_player_career_stats(player_id):
     except Exception as e:
         return {"player_id": player_id, "error": f"Erro ao obter estatísticas de carreira: {str(e)}"}
 
+@lru_cache(maxsize=32)
+def get_player_season_vs_career(player_id):
+    """Obtém estatísticas comparativas entre a temporada atual e a carreira do jogador."""
+    try:
+        # 📌 1. Buscar estatísticas da carreira (RF9)
+        career_stats = PlayerCareerStats(player_id=player_id).get_data_frames()[0]
+        
+        if career_stats.empty:
+            return {"player_id": player_id, "error": "Nenhum dado de carreira encontrado para o jogador."}
+
+        total_games_career = int(career_stats["GP"].sum())  # Total de jogos na carreira
+        total_points_career = int(career_stats["PTS"].sum())  # Pontos na carreira
+        total_assists_career = int(career_stats["AST"].sum())  # Assistências na carreira
+        total_rebounds_career = int(career_stats["REB"].sum())  # Rebotes na carreira
+        total_minutes_career = int(career_stats["MIN"].sum()) if "MIN" in career_stats.columns else None  # Minutos na carreira
+        
+        # 📌 2. Buscar estatísticas da temporada atual (RF5)
+        season_logs = PlayerGameLog(player_id=player_id, season='2024-25').get_data_frames()[0]
+        
+        if season_logs.empty:
+            return {"player_id": player_id, "error": "Nenhum dado da temporada encontrado para o jogador."}
+
+        total_games_season = len(season_logs)  # Total de jogos na temporada atual
+        total_points_season = season_logs["PTS"].sum()  # Pontos na temporada
+        total_assists_season = season_logs["AST"].sum()  # Assistências na temporada
+        total_rebounds_season = season_logs["REB"].sum()  # Rebotes na temporada
+        total_minutes_season = season_logs["MIN"].astype(float).sum() if "MIN" in season_logs.columns else None  # Minutos na temporada
+
+        # 📌 3. Calcular médias
+        avg_points_season = round(total_points_season / total_games_season, 2)
+        avg_assists_season = round(total_assists_season / total_games_season, 2)
+        avg_rebounds_season = round(total_rebounds_season / total_games_season, 2)
+        avg_minutes_season = round(total_minutes_season / total_games_season, 2) if total_minutes_season else None
+
+        avg_points_career = round(total_points_career / total_games_career, 2)
+        avg_assists_career = round(total_assists_career / total_games_career, 2)
+        avg_rebounds_career = round(total_rebounds_career / total_games_career, 2)
+        avg_minutes_career = round(total_minutes_career / total_games_career, 2) if total_minutes_career else None
+
+        return {
+            "player_id": player_id,
+            "season": {
+                "total_games": total_games_season,
+                "average_points": avg_points_season,
+                "average_assists": avg_assists_season,
+                "average_rebounds": avg_rebounds_season,
+                "total_minutes": total_minutes_season
+            },
+            "career": {
+                "total_games": total_games_career,
+                "average_points": avg_points_career,
+                "average_assists": avg_assists_career,
+                "average_rebounds": avg_rebounds_career,
+                "total_minutes": total_minutes_career
+            }
+        }
+
+    except Exception as e:
+        return {"player_id": player_id, "error": f"Erro ao obter comparação de estatísticas: {str(e)}"}
