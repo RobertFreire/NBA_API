@@ -1,6 +1,6 @@
 from nba_api.stats.static import teams, players
 from nba_api.stats.endpoints import TeamDashboardByGeneralSplits, BoxScoreTraditionalV2, CommonTeamRoster, CommonPlayerInfo, PlayerGameLog
-from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs, TeamDetails, PlayerCareerStats, PlayerGameLog
+from nba_api.stats.endpoints import TeamGameLog, TeamGameLogs, PlayerGameLogs, PlayerCareerStats, PlayerGameLog
 from requests.exceptions import ReadTimeout
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -77,6 +77,7 @@ def save_graph_data_to_csv(team_id):
 def get_team_basic_info(team_id):
     """Retorna informações básicas do time, como nome, cidade, conferência, etc."""
     team_info = teams.find_team_name_by_id(team_id)
+    time.sleep(1) 
     return {
         "team_id": team_info["id"],
         "full_name": team_info["full_name"],
@@ -203,7 +204,7 @@ def get_team_results_both_seasons(team_id):
         team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
         overall_df = team_stats.get_data_frames()[0]  # Estatísticas gerais
         location_df = team_stats.get_data_frames()[1]  # Estatísticas por local
-
+        time.sleep(1) 
         # Obtendo estatísticas separadas para jogos em casa e fora
         home_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Home'].iloc[0]
         away_stats = location_df[location_df['TEAM_GAME_LOCATION'] == 'Road'].iloc[0]
@@ -235,7 +236,7 @@ def get_team_general_stats(team_id):
     for season in seasons:
         team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
         data_frames = team_stats.get_data_frames()
-        
+        time.sleep(1) 
         # Imprimir os dados para verificar a resposta
         print(f"Resposta da API para a temporada {season}:", data_frames)
 
@@ -295,7 +296,8 @@ def get_team_divided_stats(team_id):
 
     for season in seasons:
         team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-        df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
+        df = team_stats.get_data_frames()[0] 
+        time.sleep(1) 
 
         selected_columns = {
             "REB": "Total de Rebotes",
@@ -341,7 +343,8 @@ def get_team_defensive_stats(team_id):
     
     for season in seasons:
         team_stats = TeamDashboardByGeneralSplits(team_id=team_id, season=season)
-        df = team_stats.get_data_frames()[0]  # Pegamos as estatísticas gerais (linha 0)
+        df = team_stats.get_data_frames()[0]
+        time.sleep(1) 
 
         selected_columns = {
             "STL": "Total de Roubos de Bola",
@@ -378,50 +381,46 @@ def get_team_games(team_id, season=None, retries=3, timeout=60):
     games = {}
     
     for season in seasons:
-        for attempt in range(retries):
-            try:
-                team_games = TeamGameLogs(team_id_nullable=team_id, season_nullable=season, timeout=timeout)
-                df = team_games.get_data_frames()[0]  # Pegamos os dados de jogos
-                break
-            except ReadTimeout:
-                if attempt < retries - 1:
-                    continue
-                else:
-                    raise
 
-        selected_columns = {
-            "GAME_DATE": "Data do Jogo",
-            "MATCHUP": "Adversario",
-            "WL": "Vitoria ou Derrota",
-            "PTS": "Pontos do Time",
-            "GAME_ID": "Game_ID",
-            "TEAM_ID": "Team_ID",
-            "PLUS_MINUS": "Saldo de Pontos"
-        }
+        team_games = TeamGameLogs(team_id_nullable=team_id, season_nullable=season, timeout=timeout)
+        df = team_games.get_data_frames()[0]
+        time.sleep(1)   # Pegamos os dados de jogos
+        break
 
-        # Se a coluna PLUS_MINUS existir, adicionamos ela
-        if "PLUS_MINUS" in df.columns:
-            selected_columns["PLUS_MINUS"] = "Saldo de Pontos"
 
-        # Filtramos apenas as colunas existentes
-        existing_columns = [col for col in selected_columns.keys() if col in df.columns]
-        df = df[existing_columns].rename(columns={col: selected_columns[col] for col in existing_columns})
+    selected_columns = {
+        "GAME_DATE": "Data do Jogo",
+        "MATCHUP": "Adversario",
+        "WL": "Vitoria ou Derrota",
+        "PTS": "Pontos do Time",
+        "GAME_ID": "Game_ID",
+        "TEAM_ID": "Team_ID",
+        "PLUS_MINUS": "Saldo de Pontos"
+    }
 
-        if "Saldo de Pontos" in df.columns:
-            df["Pontos do Adversario"] = df["Pontos do Time"] - df["Saldo de Pontos"]
-        else:
-            df["Pontos do Adversario"] = None 
+    # Se a coluna PLUS_MINUS existir, adicionamos ela
+    if "PLUS_MINUS" in df.columns:
+        selected_columns["PLUS_MINUS"] = "Saldo de Pontos"
 
-        # Transformar a coluna "Adversário" para indicar se o jogo foi em casa ou fora
-        df["Casa ou Fora"] = df["Adversario"].apply(lambda x: "Casa" if "vs." in x else "Fora")
-        df["Adversario"] = df["Adversario"].apply(lambda x: x.split()[-1])
+    # Filtramos apenas as colunas existentes
+    existing_columns = [col for col in selected_columns.keys() if col in df.columns]
+    df = df[existing_columns].rename(columns={col: selected_columns[col] for col in existing_columns})
 
-        # Armazenar os jogos de cada temporada
-        games[season] = {
-            "team_id": int(team_id),
-            "season": season,
-            "games": df.to_dict(orient="records")
-        }
+    if "Saldo de Pontos" in df.columns:
+        df["Pontos do Adversario"] = df["Pontos do Time"] - df["Saldo de Pontos"]
+    else:
+        df["Pontos do Adversario"] = None 
+
+    # Transformar a coluna "Adversário" para indicar se o jogo foi em casa ou fora
+    df["Casa ou Fora"] = df["Adversario"].apply(lambda x: "Casa" if "vs." in x else "Fora")
+    df["Adversario"] = df["Adversario"].apply(lambda x: x.split()[-1])
+
+    # Armazenar os jogos de cada temporada
+    games[season] = {
+        "team_id": int(team_id),
+        "season": season,
+        "games": df.to_dict(orient="records")
+    }
 
     return games
 
@@ -686,7 +685,7 @@ def get_team_players_info(team_id, retries=3, timeout=60):
                 for future in as_completed(futures):
                     player_info = future.result()
                     player_info['image_url'] = f"https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/{player_info['id']}.png"
-                    players_info.append(player_info)
+                    players_info.append(convert_numpy_types(player_info))
 
             return players_info
         except ReadTimeout:
@@ -697,100 +696,170 @@ def get_team_players_info(team_id, retries=3, timeout=60):
                 print(f"🚨 Timeout ao buscar informações do time {team_id}.")
                 raise
 
-lru_cache(maxsize=32)
-def get_player_game_logs(teamId, season="2024-25"):
-    """Obtém os dados dos jogos de todos os jogadores de um time para a temporada especificada."""
+@lru_cache(maxsize=32)
+def get_player_info(player_id):
+    """Obtém informações detalhadas de um jogador específico."""
+    from nba_api.stats.endpoints import CommonPlayerInfo
+
+    player_info = CommonPlayerInfo(player_id=player_id).get_data_frames()[0]
+    player_data = player_info.iloc[0]
+
+    team_id = player_data["TEAM_ID"]
+    team_info = teams.find_team_name_by_id(team_id)
+    team_name = team_info["full_name"]
+    team_abbreviation = team_info["abbreviation"].lower()
+    team_name_formatted = team_name.replace(' ', '-').lower()
+
+    age, salary = fetch_age_and_salary(player_data["DISPLAY_FIRST_LAST"], team_abbreviation, team_name_formatted)
+
+    player_data = {
+        "id": player_data["PERSON_ID"],
+        "name": player_data["DISPLAY_FIRST_LAST"],
+        "height": player_data["HEIGHT"],
+        "weight": player_data["WEIGHT"],
+        "age": age,
+        "experience": player_data["SEASON_EXP"] if player_data["SEASON_EXP"] != "R" else 0,
+        "position": player_data["POSITION"],
+        "college": player_data["SCHOOL"],
+        "salary": salary,
+        "image_url": f"https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/{player_data['PERSON_ID']}.png"
+    }
+
+    return convert_numpy_types(player_data)
+
+@lru_cache(maxsize=32)
+def get_player_game_logs(player_id, season="2024-25"):
+    """Obtém os dados dos jogos de um jogador para a temporada especificada."""
     try:
-        roster_df = CommonTeamRoster(team_id=teamId, season=season).get_data_frames()[0]
-        if roster_df.empty:
-            return {"error": "Nenhum jogador encontrado para esse time."}
+        response = PlayerGameLog(player_id=player_id, season=season, timeout=30).get_data_frames()
+        if not response or response[0].empty:
+            print(f"Nenhum jogo encontrado para o jogador {player_id}. Pulando.")
+            return {}
 
-        player_ids = roster_df["PLAYER_ID"].tolist()
-        players_game_logs = {}
+        game_logs = response[0]
+        game_logs = game_logs.rename(columns={
+            "GAME_DATE": "Data do Jogo",
+            "MATCHUP": "Adversario",
+            "WL": "V ou D",
+            "PTS": "Pontos",
+            "REB": "Rebotes",
+            "AST": "Assistencias",
+            "FG3A": "Tentativas de Cestas de 3",
+            "FG3M": "Cestas de 3 PTS Marcados",
+            "MIN": "Tempo de Permanencia do Jogador em Quadra",
+            "GAME_ID": "Game_ID"
+        })
 
-        for player_id in player_ids:
-            try:
-                response = PlayerGameLog(player_id=player_id, season=season, timeout=30).get_data_frames()
-                if not response or response[0].empty:
-                    print(f"Nenhum jogo encontrado para o jogador {player_id}. Pulando.")
-                    continue
+        game_logs["Casa/Fora"] = game_logs["Adversario"].apply(lambda x: "Casa" if "vs." in x else "Fora")
+        game_logs["Adversario"] = game_logs["Adversario"].apply(lambda x: x.split()[-1])
 
-                game_logs = response[0]
-                game_logs = game_logs.rename(columns={
-                    "GAME_DATE": "Data do Jogo",
-                    "MATCHUP": "Adversário",
-                    "WL": "V ou D",
-                    "PTS": "Pontos",
-                    "REB": "Rebotes",
-                    "AST": "Assistências",
-                })
+        time.sleep(1)
+        # A linha abaixo vai aplicar a função de obter o placar para cada jogo.
+        game_logs['Placar do Jogo'] = game_logs.apply(lambda row: get_game_score(row['Game_ID'], row['Casa/Fora']), axis=1)
 
-                game_logs["Casa/Fora"] = game_logs["Adversário"].apply(lambda x: "Casa" if "vs." in x else "Fora")
-                game_logs["Adversário"] = game_logs["Adversário"].apply(lambda x: x.split()[-1])
-
-                players_game_logs[player_id] = game_logs[[
-                    "Data do Jogo", "Adversário", "V ou D", "Casa/Fora", "Pontos", "Rebotes", "Assistências"
-                ]].to_dict(orient="records")
-
-            except requests.exceptions.ReadTimeout:
-                print(f"Timeout ao buscar dados do jogador {player_id}. Pulando.")
-            except Exception as e:
-                print(f"Erro ao obter dados do jogador {player_id}: {e}")
-
-        return players_game_logs
+        return game_logs.to_dict(orient="records")
 
     except Exception as e:
-        return {"error": f"Erro ao obter jogadores do time {teamId}: {e}"}
+        print(f"Erro ao obter dados do jogador {player_id}: {e}")
+        return {}
 
-
-def get_game_score(game_id, retries=3, timeout=60):
+def get_game_score(game_id, game_location, retries=3, timeout=60):
     """Obtém o placar do jogo usando o ID do jogo, com tentativas extras."""
     for attempt in range(retries):
         try:
-            box_score = BoxScoreTraditionalV2(game_id=game_id, timeout=timeout).get_data_frames()[0]
-            team_scores = box_score.groupby('TEAM_ID')['PTS'].sum()
-            return f"{team_scores.iloc[0]} - {team_scores.iloc[1]}"
-        except requests.exceptions.ReadTimeout:
-            print(f"Tentativa {attempt + 1}/{retries}: Timeout ao buscar placar do jogo {game_id}. Tentando novamente...")
-            time.sleep(5)  # Espera 5 segundos antes de tentar novamente
+            box_score = BoxScoreTraditionalV2(game_id=game_id, timeout=timeout).get_data_frames()
+            time.sleep(1)
+            if not box_score or box_score[1].empty:
+                print(f"Dados do jogo {game_id} estão vazios.")
+                return "N/A"
+            
+            team_stats = box_score[1] 
+            team_scores = team_stats.groupby('TEAM_ID')['PTS'].sum()
+
+            # Verificando se temos mais de 2 times
+            if len(team_scores) < 2:
+                print(f"Dados insuficientes para o jogo {game_id}.")
+                return "N/A"
+
+            if game_location == "Casa":
+                player_team_score = team_scores.iloc[0]  
+                opponent_team_score = team_scores.iloc[1]  
+            else:
+                player_team_score = team_scores.iloc[1]  
+                opponent_team_score = team_scores.iloc[0] 
+            return f"{player_team_score} - {opponent_team_score}"
         except Exception as e:
             print(f"Erro ao obter o placar do jogo {game_id}: {e}")
             return "N/A"
 
     return "Timeout: API da NBA não respondeu"
-
     
-def count_team_games(team_id, season='2024-25', opponent_team_abbr=None):
-    """Conta a quantidade de jogos dentro e fora de casa de um time e contra um adversário específico."""
+def count_team_games(team_id, player_id=None, season='2024-25', opponent_team_abbr=None):
+    """Conta a quantidade de jogos realizados dentro e fora de casa, e contra um determinado time."""
+    try:
+        team_games = TeamGameLogs(team_id_nullable=team_id, season_nullable=season).get_data_frames()[0]
+        print(f"Total de jogos do time {team_id} na temporada {season}: {len(team_games)}")
 
-    team_games = TeamGameLog(team_id=team_id, season=season).get_data_frames()[0]
+        if 'GAME_ID' not in team_games.columns:
+            print(f"Coluna 'GAME_ID' não encontrada em team_games para o time {team_id}.")
+            return {
+                "total_home_games": 0,
+                "total_away_games": 0,
+                "home_vs_opponent": 0,
+                "away_vs_opponent": 0
+            }
 
-    team_games['Casa/Fora'] = team_games['MATCHUP'].apply(lambda x: 'Casa' if 'vs.' in x else 'Fora')
+        if player_id:
+            player_games = PlayerGameLogs(player_id_nullable=player_id, season_nullable=season).get_data_frames()[0]
+            print(f"Total de jogos do jogador {player_id} na temporada {season}: {len(player_games)}")
+            if 'GAME_ID' not in player_games.columns:
+                print(f"Coluna 'GAME_ID' não encontrada em player_games para o jogador {player_id}.")
+                return {
+                    "total_home_games": 0,
+                    "total_away_games": 0,
+                    "home_vs_opponent": 0,
+                    "away_vs_opponent": 0
+                }
+            team_games = team_games[team_games['GAME_ID'].isin(player_games['GAME_ID'])]
+            print(f"Total de jogos do time {team_id} com o jogador {player_id}: {len(team_games)}")
 
-    total_home_games = team_games[team_games['Casa/Fora'] == 'Casa'].shape[0]
-    total_away_games = team_games[team_games['Casa/Fora'] == 'Fora'].shape[0]
+        total_home_games = team_games[team_games['MATCHUP'].str.contains('vs.')].shape[0]
+        total_away_games = team_games[team_games['MATCHUP'].str.contains('@')].shape[0]
 
-    if opponent_team_abbr:
-        games_against_opponent = team_games[team_games['MATCHUP'].str.contains(opponent_team_abbr, case=False)]
-        home_vs_opponent = games_against_opponent[games_against_opponent['Casa/Fora'] == 'Casa'].shape[0]
-        away_vs_opponent = games_against_opponent[games_against_opponent['Casa/Fora'] == 'Fora'].shape[0]
-    else:
-        home_vs_opponent = away_vs_opponent = 0
+        if opponent_team_abbr:
+            time.sleep(1)
+            games_against_opponent = team_games[team_games['MATCHUP'].str.contains(opponent_team_abbr, case=False)]
+            home_vs_opponent = games_against_opponent[games_against_opponent['MATCHUP'].str.contains('vs.')].shape[0]
+            away_vs_opponent = games_against_opponent[games_against_opponent['MATCHUP'].str.contains('@')].shape[0]
+        else:
+            home_vs_opponent = away_vs_opponent = 0
 
-    return {
-        "total_home_games": total_home_games,
-        "total_away_games": total_away_games,
-        "home_vs_opponent": home_vs_opponent,
-        "away_vs_opponent": away_vs_opponent
-    }
+        return {
+            "total_home_games": total_home_games,
+            "total_away_games": total_away_games,
+            "home_vs_opponent": home_vs_opponent,
+            "away_vs_opponent": away_vs_opponent
+        }
+    except Exception as e:
+        print(f"Erro ao contar jogos do time {team_id} e jogador {player_id}: {e}")
+        return {
+            "total_home_games": 0,
+            "total_away_games": 0,
+            "home_vs_opponent": 0,
+            "away_vs_opponent": 0
+        }
+def calculate_percentage_below_average(values, average):
+    """Calcula a porcentagem de valores abaixo da média."""
+    below_average_count = sum(1 for value in values if value < average)
+    total_count = len(values)
+    return round((below_average_count / total_count) * 100, 2) if total_count > 0 else 0
 
 def get_player_stats(player_id):
     """Retorna a média, mediana, moda e desvio padrão de pontos, rebotes e assistências de um jogador."""
 
     try:
         game_logs = PlayerGameLog(player_id=player_id, season='2024-25', timeout=120).get_data_frames()[0]
-
-
+        time.sleep(1) 
         # Se não houver dados, retornar uma resposta vazia
         if game_logs.empty:
             return {"player_id": player_id, "error": "Nenhum dado encontrado para o jogador."}
@@ -825,6 +894,11 @@ def get_player_stats(player_id):
                 "points": round(float(np.std(pts, ddof=1)), 2) if len(pts) > 1 else None,
                 "rebounds": round(float(np.std(reb, ddof=1)), 2) if len(reb) > 1 else None,
                 "assists": round(float(np.std(ast, ddof=1)), 2) if len(ast) > 1 else None
+            },
+            "percentage_below_average": {
+                "points": calculate_percentage_below_average(pts, average_points),
+                "rebounds": calculate_percentage_below_average(reb, average_rebounds),
+                "assists": calculate_percentage_below_average(ast, average_assists)
             }
         }
 
@@ -839,7 +913,7 @@ def get_player_career_stats(player_id):
     """Obtém as estatísticas totais da carreira de um jogador (pontos, assistências e rebotes)."""
     try:
         career_stats = PlayerCareerStats(player_id=player_id).get_data_frames()[0]
-
+        time.sleep(1) 
         # Se não houver dados, retorna erro
         if career_stats.empty:
             return {"player_id": player_id, "error": "Nenhum dado encontrado para a carreira do jogador."}
@@ -865,9 +939,9 @@ def get_player_career_stats(player_id):
 def get_player_season_vs_career(player_id):
     """Obtém estatísticas comparativas entre a temporada atual e a carreira do jogador."""
     try:
-        # 📌 1. Buscar estatísticas da carreira (RF9)
+        # 1. Buscar estatísticas da carreira (RF9)
         career_stats = PlayerCareerStats(player_id=player_id).get_data_frames()[0]
-        
+        time.sleep(1) 
         if career_stats.empty:
             return {"player_id": player_id, "error": "Nenhum dado de carreira encontrado para o jogador."}
 
@@ -877,9 +951,9 @@ def get_player_season_vs_career(player_id):
         total_rebounds_career = int(career_stats["REB"].sum())  # Rebotes na carreira
         total_minutes_career = int(career_stats["MIN"].sum()) if "MIN" in career_stats.columns else None  # Minutos na carreira
         
-        # 📌 2. Buscar estatísticas da temporada atual (RF5)
+        # 2. Buscar estatísticas da temporada atual (RF5)
         season_logs = PlayerGameLog(player_id=player_id, season='2024-25').get_data_frames()[0]
-        
+        time.sleep(1) 
         if season_logs.empty:
             return {"player_id": player_id, "error": "Nenhum dado da temporada encontrado para o jogador."}
 
@@ -889,7 +963,7 @@ def get_player_season_vs_career(player_id):
         total_rebounds_season = season_logs["REB"].sum()  # Rebotes na temporada
         total_minutes_season = season_logs["MIN"].astype(float).sum() if "MIN" in season_logs.columns else None  # Minutos na temporada
 
-        # 📌 3. Calcular médias
+        # 3. Calcular médias
         avg_points_season = round(total_points_season / total_games_season, 2)
         avg_assists_season = round(total_assists_season / total_games_season, 2)
         avg_rebounds_season = round(total_rebounds_season / total_games_season, 2)

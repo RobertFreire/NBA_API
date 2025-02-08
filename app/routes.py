@@ -13,7 +13,8 @@ from app.services import (
     get_scatter_chart_points, get_team_basic_info,
     get_team_players_info, get_player_game_logs,
     count_team_games, get_player_stats, get_player_career_stats, get_player_season_vs_career,
-    save_player_stats_to_csv, save_player_games_to_csv, save_performance_graphs
+    save_player_stats_to_csv, save_player_games_to_csv, save_performance_graphs,
+    get_player_info
 )
 
 
@@ -138,49 +139,45 @@ def team_players(team_id):
     players_info = get_team_players_info(team_id)
     return jsonify(players_info), 200
 
+@main.route('/player/<int:player_id>', methods=['GET'])
+def player_info(player_id):
+    """Retorna informações de um jogador específico."""
+    player_data = get_player_info(player_id)
+    return jsonify(player_data), 200
+
 # RF2 & RF3
-@main.route('/team/<int:team_id>/players/games', methods=['GET'])
-def team_players_games(team_id):
+@main.route('/player/<int:player_id>/games', methods=['GET'])
+def team_players_games(player_id):
     """Retorna os dados dos jogos de todos os jogadores de um time específico durante a temporada atual."""
     
-    players_game_logs = get_player_game_logs(team_id, '2024-25')
+    players_game_logs = get_player_game_logs(player_id, '2024-25')
     
     return jsonify(players_game_logs), 200
 
 #RF4
-@main.route('/team/<int:team_id>/home_away_games', methods=['GET'])
-def home_away_games(team_id):
+@main.route('/team/<int:team_id>/player/<int:player_id>/home_away_games', methods=['GET'])
+def home_away_games(team_id, player_id):
     """Retorna a quantidade de jogos realizados dentro e fora de casa, e contra um determinado time."""
     opponent = request.args.get('opponent')
     season = request.args.get('season', '2024-25')
-    games_count = count_team_games(team_id, season, opponent)
+    games_count = count_team_games(team_id, player_id, season, opponent), 
     return jsonify(games_count), 200
 
-#RF5 RF6 RF7
-@main.route('/team/<int:team_id>/player_stats', methods=['GET'])
-def team_player_stats(team_id):
-    """Retorna a média, mediana e moda de pontos, rebotes e assistências dos jogadores."""
-    stats = get_player_stats(team_id)
-    return jsonify(stats), 200
-
-
-
-
-
+#RF5 RF6 RF7 RF8
 @main.route('/player/<int:player_id>/stats', methods=['GET'])
 def player_stats(player_id):
     """Retorna a média, mediana, moda e desvio padrão de pontos, rebotes e assistências de um jogador específico."""
     stats = get_player_stats(player_id)
     return jsonify(stats), 200
 
-
+#RF9
 @main.route('/player/<int:player_id>/career_stats', methods=['GET'])
 def player_career_stats(player_id):
     """Retorna os totais de pontos, assistências e rebotes da carreira do jogador."""
     stats = get_player_career_stats(player_id)
     return jsonify(stats), 200
 
-
+#RF10
 @main.route('/player/<int:player_id>/season_vs_career', methods=['GET'])
 def player_season_vs_career(player_id):
     """Retorna a comparação das estatísticas da temporada atual com a carreira do jogador."""
