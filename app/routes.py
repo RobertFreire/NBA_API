@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from pygam import PoissonGAM, LinearGAM, s, te
 from scipy import stats
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, LogisticRegression
@@ -573,3 +574,62 @@ def logistic_regression_roc_curve():
         }), 200
     except Exception as e:
         return jsonify({"error": f"Erro ao calcular curva ROC: {str(e)}"}), 500
+
+@main.route('/gamlss/predict', methods=['POST'])
+def gamlss_predict():
+    data = request.json
+    if not data:
+        return jsonify({"error": "Nenhum dado fornecido."}), 400
+
+    df = pd.DataFrame(data)
+    required_columns = ["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV", "Pontos", "Assistencias", "Rebotes"]
+    if not all(col in df.columns for col in required_columns):
+        return jsonify({"error": f"Os dados devem conter as colunas: {required_columns}"}), 400
+
+    X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
+    y_points = df["Pontos"]
+    y_assists = df["Assistencias"]
+    y_rebounds = df["Rebotes"]
+
+    # Normalizar os dados
+    from sklearn.preprocessing import StandardScaler
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Verificar se há pelo menos 2 amostras
+    if len(X) < 2:
+        return jsonify({"error": "Número insuficiente de dados para treinar e testar o modelo. Forneça pelo menos 2 registros."}), 400
+
+    # Dividir os dados apenas se houver amostras suficientes
+    if len(X) > 2:
+        X_train, X_test, y_points_train, y_points_test = train_test_split(X_scaled, y_points, test_size=0.2, random_state=42)
+        _, _, y_assists_train, y_assists_test = train_test_split(X_scaled, y_assists, test_size=0.2, random_state=42)
+        _, _, y_rebounds_train, y_rebounds_test = train_test_split(X_scaled, y_rebounds, test_size=0.2, random_state=42)
+    else:
+        X_train, y_points_train, y_assists_train, y_rebounds_train = X_scaled, y_points, y_assists, y_rebounds
+
+    gam_points = PoissonGAM(s(0, n_splines=5) + s(1, n_splines=5) + s(2, n_splines=5)).fit(X_train, y_points_train)
+    gam_assists = LinearGAM(s(0, n_splines=5) + s(1, n_splines=5) + s(2, n_splines=5)).fit(X_train, y_assists_train)
+    gam_rebounds = LinearGAM(s(0, n_splines=5) + s(1, n_splines=5) + s(2, n_splines=5)).fit(X_train, y_rebounds_train)
+
+    # Prever os valores para o próximo jogo
+    next_game = scaler.transform(X.iloc[-1:])
+    prediction_points = max(0, gam_points.predict(next_game)[0])
+    prediction_assists = max(0, gam_assists.predict(next_game)[0])
+    prediction_rebounds = max(0, gam_rebounds.predict(next_game)[0])
+
+    return jsonify({
+        "next_game_prediction": {
+            "points": round(prediction_points, 2),
+            "assists": round(prediction_assists, 2),
+            "rebounds": round(prediction_rebounds, 2)
+        },
+        "model_details": {
+            "points": {"scores": gam_points.statistics_["pseudo_r2"]},
+            "assists": {"scores": gam_assists.statistics_["pseudo_r2"]},
+            "rebounds": {"scores": gam_rebounds.statistics_["pseudo_r2"]}
+        }
+    }), 200
+
+
+
