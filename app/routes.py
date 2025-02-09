@@ -14,7 +14,7 @@ from app.services import (
     get_team_players_info, get_player_game_logs,
     count_team_games, get_player_stats, get_player_career_stats, get_player_season_vs_career,
     save_player_stats_to_csv, save_player_games_to_csv, save_performance_graphs,
-    get_player_info
+    get_player_info, calculate_gumbel_distribution
 )
 
 
@@ -197,3 +197,16 @@ def generate_graphs(player_id):
     """Gera e salva gráficos de desempenho do jogador em HTML."""
     save_performance_graphs(player_id)
     return jsonify({"message": f"Gráficos do jogador {player_id} gerados com sucesso!"}), 200
+
+
+@main.route('/player/<int:player_id>/gumbel', methods=['POST'])
+def calculate_gumbel_distribution_endpoint(player_id):
+    """Calcula probabilidades baseadas na distribuição de Gumbel para pontos, rebotes e assistências."""
+    data = request.json
+    points = data.get("points", 0)
+    rebounds = data.get("rebounds", 0)
+    assists = data.get("assists", 0)
+
+    # Chama a função do services.py
+    result = calculate_gumbel_distribution(player_id, points, rebounds, assists)
+    return jsonify(result), 200

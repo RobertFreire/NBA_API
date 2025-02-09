@@ -865,20 +865,30 @@ def get_player_stats(player_id):
             return {"player_id": player_id, "error": "Nenhum dado encontrado para o jogador."}
 
         # Selecionando apenas as colunas necessárias
-        game_logs = game_logs[['MATCHUP', 'PTS', 'REB', 'AST']]
+        game_logs = game_logs[['PTS', 'REB', 'AST']]
 
         # Convertendo os dados para listas
         pts = game_logs['PTS'].astype(float).tolist()
         reb = game_logs['REB'].astype(float).tolist()
         ast = game_logs['AST'].astype(float).tolist()
 
+        # Calculando médias
+        average_points = round(float(np.mean(pts)), 2)
+        average_rebounds = round(float(np.mean(reb)), 2)
+        average_assists = round(float(np.mean(ast)), 2)
+
+        # Calculando porcentagens abaixo da média
+        percentage_below_average_points = calculate_percentage_below_average(pts, average_points)
+        percentage_below_average_rebounds = calculate_percentage_below_average(reb, average_rebounds)
+        percentage_below_average_assists = calculate_percentage_below_average(ast, average_assists)
+
         # Calculando estatísticas
         stats_data = {
             "player_id": int(player_id),
             "average": {
-                "points": round(float(np.mean(pts)), 2),
-                "rebounds": round(float(np.mean(reb)), 2),
-                "assists": round(float(np.mean(ast)), 2)
+                "points": average_points,
+                "rebounds": average_rebounds,
+                "assists": average_assists
             },
             "median": {
                 "points": float(np.median(pts)),
@@ -896,9 +906,9 @@ def get_player_stats(player_id):
                 "assists": round(float(np.std(ast, ddof=1)), 2) if len(ast) > 1 else None
             },
             "percentage_below_average": {
-                "points": calculate_percentage_below_average(pts, average_points),
-                "rebounds": calculate_percentage_below_average(reb, average_rebounds),
-                "assists": calculate_percentage_below_average(ast, average_assists)
+                "points": percentage_below_average_points,
+                "rebounds": percentage_below_average_rebounds,
+                "assists": percentage_below_average_assists
             }
         }
 
@@ -906,6 +916,7 @@ def get_player_stats(player_id):
 
     except Exception as e:
         return {"player_id": player_id, "error": f"Erro ao obter estatísticas: {str(e)}"}
+
 
 
 @lru_cache(maxsize=32)
@@ -1120,4 +1131,48 @@ def save_performance_graphs(player_id):
         f.write("</body></html>")
     
     print(f"✅ Gráficos salvos em {file_path}")
+
+def calculate_gumbel_distribution(player_id, x_points, x_rebounds, x_assists):
+    """Calcula as probabilidades com base na distribuição Gumbel."""
+    # Substitua por dados reais de estatísticas do jogador
+    stats = get_player_stats(player_id)
+    if "error" in stats:
+        return {"error": stats["error"]}
+
+    # Probabilidades para pontos
+    mean_points = stats["average"]["points"]
+    std_dev_points = stats["standard_deviation"]["points"]
+
+    # Probabilidades para rebotes
+    mean_rebounds = stats["average"]["rebounds"]
+    std_dev_rebounds = stats["standard_deviation"]["rebounds"]
+
+    # Probabilidades para assistências
+    mean_assists = stats["average"]["assists"]
+    std_dev_assists = stats["standard_deviation"]["assists"]
+
+    gumbel_points = calculate_gumbel_probability(mean_points, std_dev_points, x_points)
+    gumbel_rebounds = calculate_gumbel_probability(mean_rebounds, std_dev_rebounds, x_rebounds)
+    gumbel_assists = calculate_gumbel_probability(mean_assists, std_dev_assists, x_assists)
+
+    return {
+        "gumbel_points": gumbel_points,
+        "gumbel_rebounds": gumbel_rebounds,
+        "gumbel_assists": gumbel_assists
+    }
+    
+def calculate_gumbel_probability(mean, std_dev, x):
+    """Calcula probabilidades com a distribuição de Gumbel."""
+    z = (x - mean) / std_dev
+    above_x = 1 - np.exp(-np.exp(-z))
+    below_x = np.exp(-np.exp(-z))
+    at_least_x = 1 - below_x
+    exactly_x = (1 / std_dev) * np.exp(-(z + np.exp(-z)))
+
+    return {
+        "above_x": round(above_x, 4),
+        "below_x": round(below_x, 4),
+        "at_least_x": round(at_least_x, 4),
+        "exactly_x": round(exactly_x, 4)
+    }
 
