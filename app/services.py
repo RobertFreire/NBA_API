@@ -727,9 +727,9 @@ def get_player_info(player_id):
 
     return convert_numpy_types(player_data)
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=128)
 def get_player_game_logs(player_id, season="2024-25"):
-    """Obtém os dados dos jogos de um jogador para a temporada especificada."""
+    """Obtém os dados dos jogos de um jogador para a temporada especificada com cache."""
     try:
         response = PlayerGameLog(player_id=player_id, season=season, timeout=30).get_data_frames()
         if not response or response[0].empty:
@@ -753,7 +753,6 @@ def get_player_game_logs(player_id, season="2024-25"):
         game_logs["Casa/Fora"] = game_logs["Adversario"].apply(lambda x: "Casa" if "vs." in x else "Fora")
         game_logs["Adversario"] = game_logs["Adversario"].apply(lambda x: x.split()[-1])
 
-        time.sleep(1)
         # A linha abaixo vai aplicar a função de obter o placar para cada jogo.
         game_logs['Placar do Jogo'] = game_logs.apply(lambda row: get_game_score(row['Game_ID'], row['Casa/Fora']), axis=1)
 
@@ -762,6 +761,7 @@ def get_player_game_logs(player_id, season="2024-25"):
     except Exception as e:
         print(f"Erro ao obter dados do jogador {player_id}: {e}")
         return {}
+
 
 def get_game_score(game_id, game_location, retries=3, timeout=60):
     """Obtém o placar do jogo usando o ID do jogo, com tentativas extras."""
@@ -1176,3 +1176,29 @@ def calculate_gumbel_probability(mean, std_dev, x):
         "exactly_x": round(exactly_x, 4)
     }
 
+def get_team_players_games_parallel(team_id, season="2024-25"):
+    """Obtém dados detalhados dos jogos de cada jogador de um time de forma paralela."""
+    players_info = get_team_players_info(team_id)
+    
+    if not players_info:
+        return {"error": "Nenhum jogador encontrado para o time."}
+
+    players_games = {}
+
+    # Paralelizando as chamadas para obter os logs dos jogadores
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(get_player_game_logs, player["id"], season): player["name"]
+            for player in players_info
+        }
+
+        for future in as_completed(futures):
+            player_name = futures[future]
+            try:
+                game_logs = future.result()
+                if game_logs:
+                    players_games[player_name] = game_logs
+            except Exception as e:
+                print(f"Erro ao obter logs para {player_name}: {e}")
+
+    return players_games

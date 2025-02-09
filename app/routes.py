@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from app.services import (
     get_teams_by_conference, get_team_rankings,
@@ -14,7 +15,7 @@ from app.services import (
     get_team_players_info, get_player_game_logs,
     count_team_games, get_player_stats, get_player_career_stats, get_player_season_vs_career,
     save_player_stats_to_csv, save_player_games_to_csv, save_performance_graphs,
-    get_player_info, calculate_gumbel_distribution
+    get_player_info, calculate_gumbel_distribution, get_team_players_games_parallel
 )
 
 
@@ -210,3 +211,45 @@ def calculate_gumbel_distribution_endpoint(player_id):
     # Chama a função do services.py
     result = calculate_gumbel_distribution(player_id, points, rebounds, assists)
     return jsonify(result), 200
+
+
+@main.route('/team/<int:team_id>/players/games', methods=['GET'])
+def get_team_players_games(team_id):
+    """
+    Retorna os dados detalhados dos jogos de cada jogador de um time
+    durante a temporada atual (2024-25), utilizando paralelismo.
+    """
+    season = "2024-25"
+    try:
+        # Obter informações dos jogadores do time
+        players_info = get_team_players_info(team_id)
+
+        if not players_info:
+            return jsonify({"error": "Nenhum jogador encontrado para o time."}), 404
+
+        players_games = {}
+
+        # Processar requisições de forma paralela
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_player = {
+                executor.submit(get_player_game_logs, player["id"], season): player["name"]
+                for player in players_info
+            }
+
+            for future in as_completed(future_to_player):
+                player_name = future_to_player[future]
+                try:
+                    game_logs = future.result()
+                    if game_logs:
+                        players_games[player_name] = game_logs
+                except Exception as e:
+                    print(f"Erro ao processar jogador {player_name}: {e}")
+
+        if not players_games:
+            return jsonify({"error": "Nenhum dado de jogos encontrado para os jogadores do time."}), 404
+
+        return jsonify(players_games), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
+
