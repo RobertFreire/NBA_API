@@ -15,7 +15,7 @@ from app.services import (
     get_team_players_info, get_player_game_logs,
     count_team_games, get_player_stats, get_player_career_stats, get_player_season_vs_career,
     save_player_stats_to_csv, save_player_games_to_csv, save_performance_graphs,
-    get_player_info, calculate_gumbel_distribution, get_team_players_games_parallel
+    get_player_info, calculate_gumbel_distribution, get_team_players_games_parallel, get_home_away_stats
 )
 
 
@@ -284,3 +284,15 @@ def filter_player_games(player_id):
 
     except Exception as e:
         return jsonify({"error": f"Erro ao filtrar jogos: {str(e)}"}), 500
+
+
+@main.route('/player/<int:player_id>/home_away_stats', methods=['GET'])
+def player_home_away_stats(player_id):
+    """
+    Retorna a quantidade de jogos dentro e fora de casa, e os jogos contra um adversário específico.
+    """
+    season = request.args.get("season", "2024-25")
+    opponent = request.args.get("opponent")  # Adversário opcional
+
+    stats = get_home_away_stats(player_id=player_id, season=season, opponent=opponent)
+    return jsonify(stats), 200

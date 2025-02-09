@@ -1202,3 +1202,37 @@ def get_team_players_games_parallel(team_id, season="2024-25"):
                 print(f"Erro ao obter logs para {player_name}: {e}")
 
     return players_games
+
+@lru_cache(maxsize=32)
+def get_home_away_stats(player_id=None, season="2024-25", opponent=None):
+    """
+    Retorna a quantidade de jogos dentro e fora de casa, e os jogos contra um adversário específico.
+    """
+    try:
+        # Obter os logs de jogos do jogador
+        game_logs = get_player_game_logs(player_id, season=season)
+
+        if not game_logs:
+            return {"error": f"Nenhum dado de jogos encontrado para o jogador {player_id} na temporada {season}."}
+
+        total_home_games = sum(1 for game in game_logs if game["Casa/Fora"] == "Casa")
+        total_away_games = sum(1 for game in game_logs if game["Casa/Fora"] == "Fora")
+
+        # Filtro adicional para jogos contra o adversário
+        if opponent:
+            games_against_opponent = [game for game in game_logs if game["Adversario"] == opponent]
+            home_vs_opponent = sum(1 for game in games_against_opponent if game["Casa/Fora"] == "Casa")
+            away_vs_opponent = sum(1 for game in games_against_opponent if game["Casa/Fora"] == "Fora")
+        else:
+            home_vs_opponent = away_vs_opponent = 0
+
+        return {
+            "total_home_games": total_home_games,
+            "total_away_games": total_away_games,
+            "home_vs_opponent": home_vs_opponent,
+            "away_vs_opponent": away_vs_opponent,
+        }
+
+    except Exception as e:
+        return {"error": f"Erro ao calcular estatísticas: {str(e)}"}
+
