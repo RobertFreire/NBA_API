@@ -253,3 +253,34 @@ def get_team_players_games(team_id):
     except Exception as e:
         return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
 
+@main.route('/player/<int:player_id>/games/filter', methods=['GET'])
+def filter_player_games(player_id):
+    """
+    Filtra os dados de jogos de um jogador contra um adversário específico.
+    """
+    opponent = request.args.get("opponent", "").upper()
+    season = request.args.get("season", "2024-25")
+
+    if not opponent:
+        return jsonify({"error": "É necessário fornecer o adversário (opponent)."}), 400
+
+    try:
+        # Obter os dados dos jogos do jogador
+        game_logs = get_player_game_logs(player_id, season)
+
+        if not game_logs:
+            return jsonify({"error": f"Nenhum jogo encontrado para o jogador {player_id} na temporada {season}."}), 404
+
+        # Filtrar os jogos pelo adversário
+        filtered_games = [
+            game for game in game_logs
+            if game["Adversario"].upper() == opponent
+        ]
+
+        if not filtered_games:
+            return jsonify({"error": f"Nenhum jogo encontrado contra o adversário {opponent}."}), 404
+
+        return jsonify(filtered_games), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Erro ao filtrar jogos: {str(e)}"}), 500
