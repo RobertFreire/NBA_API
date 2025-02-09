@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, request
 from scipy import stats
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
 from sklearn.metrics import confusion_matrix, roc_curve, auc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -497,5 +497,79 @@ def linear_regression_coefficients():
     except Exception as e:
         return jsonify({"error": f"Erro ao retornar coeficientes: {str(e)}"}), 500
     
+@main.route('/regression/logistic/train', methods=['POST'])
+def train_logistic_regression():
+    """
+    Treina um modelo de regressão logística com base nos dados fornecidos.
+    """
+    data = request.json  # Espera receber os dados em JSON (lista de dicionários)
+    df = pd.DataFrame(data)
+
+    # Variáveis independentes e dependente
+    X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
+    y = df["Pontuacao_Alta"]  # Essa coluna deve ser fornecida no dataset (1 para alta, 0 para baixa)
+
+    # Divisão dos dados
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+    # Modelo de regressão logística
+    model = LogisticRegression()
+    model.fit(X_train, y_train)
+
+    # Predições
+    y_pred = model.predict(X_test)
+
+    # Métricas
+    accuracy = accuracy_score(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+
+    return jsonify({
+        "accuracy": accuracy,
+        "confusion_matrix": cm.tolist()
+    }), 200
+
+
+@main.route('/regression/logistic/predict', methods=['POST'])
+def predict_logistic_regression():
+    """
+    Faz previsões usando o modelo de regressão logística treinado.
+    """
+    data = request.json  # Espera receber os dados em JSON
+    df = pd.DataFrame(data)
+
+    try:
+        # Certifique-se de que o modelo foi treinado previamente
+        if not logistic_model:
+            return jsonify({"error": "Modelo de regressão logística ainda não foi treinado."}), 400
+
+        # Fazer predições
+        X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
+        predictions = logistic_model.predict(X).tolist()
+
+        return jsonify({"predictions": predictions}), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao fazer predições: {str(e)}"}), 500
     
-    
+@main.route('/regression/logistic/roc_curve', methods=['POST'])
+def logistic_regression_roc_curve():
+    """
+    Gera os dados para a curva ROC da regressão logística.
+    """
+    data = request.json  # Recebe os dados como [{"real": valor, "prob": probabilidade}]
+    if not data:
+        return jsonify({"error": "Nenhum dado recebido."}), 400
+
+    real = [item["real"] for item in data]
+    probs = [item["prob"] for item in data]
+
+    try:
+        fpr, tpr, thresholds = roc_curve(real, probs)
+        roc_auc = auc(fpr, tpr)
+        return jsonify({
+            "fpr": fpr.tolist(),
+            "tpr": tpr.tolist(),
+            "thresholds": thresholds.tolist(),
+            "auc": roc_auc
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao calcular curva ROC: {str(e)}"}), 500
