@@ -1236,3 +1236,97 @@ def get_home_away_stats(player_id=None, season="2024-25", opponent=None):
     except Exception as e:
         return {"error": f"Erro ao calcular estatísticas: {str(e)}"}
 
+def calculate_player_averages(player_id, season="2024-25"):
+    """
+    Calcula a média de pontos, rebotes e assistências de um jogador 
+    e a porcentagem de jogos abaixo da média para cada estatística.
+    """
+    try:
+        # Obter logs de jogos do jogador
+        game_logs = get_player_game_logs(player_id, season)
+
+        if not game_logs:
+            return {"player_id": player_id, "error": "Nenhum dado de jogo encontrado."}
+
+        # Extrair estatísticas
+        points = [game["Pontos"] for game in game_logs]
+        rebounds = [game["Rebotes"] for game in game_logs]
+        assists = [game["Assistencias"] for game in game_logs]
+
+        # Calcular médias
+        avg_points = round(sum(points) / len(points), 2) if points else 0
+        avg_rebounds = round(sum(rebounds) / len(rebounds), 2) if rebounds else 0
+        avg_assists = round(sum(assists) / len(assists), 2) if assists else 0
+
+        # Calcular porcentagens abaixo da média
+        below_avg_points = round(sum(1 for p in points if p < avg_points) / len(points) * 100, 2) if points else 0
+        below_avg_rebounds = round(sum(1 for r in rebounds if r < avg_rebounds) / len(rebounds) * 100, 2) if rebounds else 0
+        below_avg_assists = round(sum(1 for a in assists if a < avg_assists) / len(assists) * 100, 2) if assists else 0
+
+        return {
+            "player_id": player_id,
+            "average": {
+                "points": avg_points,
+                "rebounds": avg_rebounds,
+                "assists": avg_assists,
+            },
+            "percentage_below_average": {
+                "points": below_avg_points,
+                "rebounds": below_avg_rebounds,
+                "assists": below_avg_assists,
+            }
+        }
+
+    except Exception as e:
+        return {"player_id": player_id, "error": f"Erro ao calcular médias: {str(e)}"}
+
+def calculate_percentage_below_median(values, median):
+    """Calcula a porcentagem de valores abaixo da mediana."""
+    below_median_count = sum(1 for value in values if value < median)
+    total_count = len(values)
+    return round((below_median_count / total_count) * 100, 2) if total_count > 0 else 0
+
+def get_player_median_stats(player_id, season="2024-25"):
+    """Retorna a mediana de pontos, rebotes e assistências de um jogador e a porcentagem abaixo da mediana."""
+    try:
+        game_logs = PlayerGameLog(player_id=player_id, season=season).get_data_frames()[0]
+        time.sleep(1) 
+        if game_logs.empty:
+            return {"player_id": player_id, "error": "Nenhum dado encontrado para o jogador."}
+
+        # Extraindo as colunas necessárias
+        game_logs = game_logs[['PTS', 'REB', 'AST']]
+
+        # Convertendo os dados para listas
+        pts = game_logs['PTS'].astype(float).tolist()
+        reb = game_logs['REB'].astype(float).tolist()
+        ast = game_logs['AST'].astype(float).tolist()
+
+        # Calculando a mediana
+        median_points = round(float(np.median(pts)), 2)
+        median_rebounds = round(float(np.median(reb)), 2)
+        median_assists = round(float(np.median(ast)), 2)
+
+        # Calculando porcentagem abaixo da mediana
+        percentage_below_median_points = calculate_percentage_below_median(pts, median_points)
+        percentage_below_median_rebounds = calculate_percentage_below_median(reb, median_rebounds)
+        percentage_below_median_assists = calculate_percentage_below_median(ast, median_assists)
+
+        stats_data = {
+            "player_id": player_id,
+            "median": {
+                "points": median_points,
+                "rebounds": median_rebounds,
+                "assists": median_assists
+            },
+            "percentage_below_median": {
+                "points": percentage_below_median_points,
+                "rebounds": percentage_below_median_rebounds,
+                "assists": percentage_below_median_assists
+            }
+        }
+
+        return stats_data
+
+    except Exception as e:
+        return {"player_id": player_id, "error": f"Erro ao calcular estatísticas de mediana: {str(e)}"}

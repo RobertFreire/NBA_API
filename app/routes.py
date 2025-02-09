@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
+from scipy import stats
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
+import numpy as np
 from app.services import (
     get_teams_by_conference, get_team_rankings,
     get_team_results_both_seasons, get_team_general_stats, 
@@ -15,7 +17,7 @@ from app.services import (
     get_team_players_info, get_player_game_logs,
     count_team_games, get_player_stats, get_player_career_stats, get_player_season_vs_career,
     save_player_stats_to_csv, save_player_games_to_csv, save_performance_graphs,
-    get_player_info, calculate_gumbel_distribution, get_team_players_games_parallel, get_home_away_stats
+    get_player_info, calculate_gumbel_distribution, get_team_players_games_parallel, get_home_away_stats, get_player_median_stats
 )
 
 
@@ -296,3 +298,84 @@ def player_home_away_stats(player_id):
 
     stats = get_home_away_stats(player_id=player_id, season=season, opponent=opponent)
     return jsonify(stats), 200
+
+@main.route('/player/<int:player_id>/averages', methods=['GET'])
+def player_averages(player_id):
+    """
+    Retorna a média de pontos, rebotes e assistências de um jogador,
+    bem como a porcentagem de jogos abaixo da média para cada estatística.
+    """
+    season = request.args.get("season", "2024-25")
+    from app.services import calculate_player_averages
+    stats = calculate_player_averages(player_id, season)
+    return jsonify(stats), 200
+
+@main.route('/player/<int:player_id>/medians', methods=['GET'])
+def player_median_stats(player_id):
+    """Retorna a mediana de pontos, rebotes e assistências de um jogador e a porcentagem abaixo da mediana."""
+    season = request.args.get('season', '2024-25')
+    stats = get_player_median_stats(player_id, season)
+    return jsonify(stats), 200
+
+def convert_to_native(obj):
+    """Converte tipos NumPy para tipos nativos do Python antes da serialização."""
+    if isinstance(obj, (np.integer, np.int64)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_to_native(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_native(i) for i in obj]
+    return obj
+
+@main.route('/player/<int:player_id>/modes', methods=['GET'])
+def calculate_modes(player_id):
+    """Calcula as modas de pontos, rebotes e assistências do jogador."""
+    season = request.args.get('season', '2024-25')
+
+    try:
+        game_logs = get_player_game_logs(player_id, season)
+        
+        if not game_logs:
+            return jsonify({"error": "Nenhum dado encontrado para o jogador."}), 404
+
+        # Verificar as chaves nos dados retornados
+        points = [log["Pontos"] for log in game_logs if "Pontos" in log]
+        rebounds = [log["Rebotes"] for log in game_logs if "Rebotes" in log]
+        assists = [log["Assistencias"] for log in game_logs if "Assistencias" in log]  # Alterado para chave sem acento
+
+        if not points or not rebounds or not assists:
+            return jsonify({"error": "Dados incompletos para calcular as modas."}), 400
+
+        modes = {
+            "points": stats.mode(points, keepdims=True)[0][0] if points else None,
+            "rebounds": stats.mode(rebounds, keepdims=True)[0][0] if rebounds else None,
+            "assists": stats.mode(assists, keepdims=True)[0][0] if assists else None
+        }
+
+        mode_counts = {
+            "points": stats.mode(points, keepdims=True)[1][0] if points else None,
+            "rebounds": stats.mode(rebounds, keepdims=True)[1][0] if rebounds else None,
+            "assists": stats.mode(assists, keepdims=True)[1][0] if assists else None
+        }
+
+        percentage_below_mode = {
+            "points": sum(1 for p in points if p < modes["points"]) / len(points) * 100 if points else None,
+            "rebounds": sum(1 for r in rebounds if r < modes["rebounds"]) / len(rebounds) * 100 if rebounds else None,
+            "assists": sum(1 for a in assists if a < modes["assists"]) / len(assists) * 100 if assists else None
+        }
+
+        result = {
+            "player_id": player_id,
+            "modes": convert_to_native(modes),
+            "mode_counts": convert_to_native(mode_counts),
+            "percentage_below_mode": convert_to_native(percentage_below_mode)
+        }
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
