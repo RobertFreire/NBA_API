@@ -1,7 +1,12 @@
 from flask import Blueprint, jsonify, request
 from scipy import stats
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import confusion_matrix, roc_curve, auc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
+import pandas as pd
 import numpy as np
 from app.services import (
     get_teams_by_conference, get_team_rankings,
@@ -379,3 +384,118 @@ def calculate_modes(player_id):
 
     except Exception as e:
         return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
+
+
+@main.route('/regression/linear/train', methods=['POST'])
+def train_linear_regression():
+    """
+    Treina e testa um modelo de regressão linear com base nos dados fornecidos.
+    """
+    data = request.json  # Espera receber os dados em JSON (lista de dicionários)
+    df = pd.DataFrame(data)
+
+    # Variáveis independentes e dependentes
+    X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
+    y = df[["Pontos", "Assistencias", "Rebotes"]]
+
+    # Divisão dos dados
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+    # Modelo de regressão linear
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    # Predições
+    y_pred = model.predict(X_test)
+
+    # Métricas
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    # Coeficientes do modelo
+    coeficients = dict(zip(X.columns, model.coef_.tolist()))
+
+    return jsonify({
+        "mse": mse,
+        "r2_score": r2,
+        "coeficients": coeficients
+    }), 200
+    
+def categorize(value):
+    """Categorização em intervalos."""
+    if value <= 10:
+        return 0
+    elif value <= 20:
+        return 1
+    elif value <= 30:
+        return 2
+    else:
+        return 3
+    
+@main.route('/regression/linear/confusion_matrix', methods=['POST'])
+def linear_regression_confusion_matrix():
+    """
+    Gera a matriz de confusão para a regressão linear com categorias.
+    """
+    data = request.json  # Recebe os dados como [{"real": valor, "predicted": valor}]
+    if not data:
+        return jsonify({"error": "Nenhum dado recebido."}), 400
+
+    try:
+        # Extrair valores reais e preditos e categorizá-los
+        real = [categorize(item["real"]) for item in data]
+        predicted = [categorize(item["predicted"]) for item in data]
+
+        # Construir a matriz de confusão
+        cm = confusion_matrix(real, predicted)
+        return jsonify({"confusion_matrix": cm.tolist()}), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao calcular matriz de confusão: {str(e)}"}), 500
+
+
+
+@main.route('/regression/linear/roc_curve', methods=['POST'])
+def linear_regression_roc_curve():
+    """
+    Gera os dados para a curva ROC.
+    Recebe os dados reais e as probabilidades preditas para calcular a curva ROC.
+    """
+    data = request.json  # Recebe os dados como [{"real": valor, "prob": probabilidade}]
+    if not data:
+        return jsonify({"error": "Nenhum dado recebido."}), 400
+
+    real = [item["real"] for item in data]
+    probs = [item["prob"] for item in data]
+
+    try:
+        fpr, tpr, thresholds = roc_curve(real, probs)
+        roc_auc = auc(fpr, tpr)
+        return jsonify({
+            "fpr": fpr.tolist(),
+            "tpr": tpr.tolist(),
+            "thresholds": thresholds.tolist(),
+            "auc": roc_auc
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao calcular curva ROC: {str(e)}"}), 500
+
+
+@main.route('/regression/linear/coefficients', methods=['GET'])
+def linear_regression_coefficients():
+    """
+    Retorna os coeficientes do modelo de regressão linear treinado.
+    """
+    try:
+        # Certifique-se de que o modelo foi treinado previamente.
+        if not linear_model:
+            return jsonify({"error": "Modelo de regressão linear ainda não foi treinado."}), 400
+
+        coefficients = {
+            feature: coef for feature, coef in zip(["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"], linear_model.coef_)
+        }
+        return jsonify({"coefficients": coefficients}), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao retornar coeficientes: {str(e)}"}), 500
+    
+    
+    
