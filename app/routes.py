@@ -208,13 +208,12 @@ def generate_graphs(player_id):
     return jsonify({"message": f"Gráficos do jogador {player_id} gerados com sucesso!"}), 200
 
 
-@main.route('/player/<int:player_id>/gumbel', methods=['POST'])
+@main.route('/player/<int:player_id>/gumbel', methods=['GET'])
 def calculate_gumbel_distribution_endpoint(player_id):
     """Calcula probabilidades baseadas na distribuição de Gumbel para pontos, rebotes e assistências."""
-    data = request.json
-    points = data.get("points", 0)
-    rebounds = data.get("rebounds", 0)
-    assists = data.get("assists", 0)
+    points = request.args.get("points", type=int, default=0)
+    rebounds = request.args.get("rebounds", type=int, default=0)
+    assists = request.args.get("assists", type=int, default=0)
 
     # Chama a função do services.py
     result = calculate_gumbel_distribution(player_id, points, rebounds, assists)
@@ -387,227 +386,265 @@ def calculate_modes(player_id):
         return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
 
 
-@main.route('/regression/linear/train', methods=['POST'])
-def train_linear_regression():
-    """
-    Treina e testa um modelo de regressão linear com base nos dados fornecidos.
-    """
-    data = request.json  # Espera receber os dados em JSON (lista de dicionários)
-    df = pd.DataFrame(data)
-
-    # Variáveis independentes e dependentes
-    X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
-    y = df[["Pontos", "Assistencias", "Rebotes"]]
-
-    # Divisão dos dados
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-    # Modelo de regressão linear
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-
-    # Predições
-    y_pred = model.predict(X_test)
-
-    # Métricas
-    mse = mean_squared_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-
-    # Coeficientes do modelo
-    coeficients = dict(zip(X.columns, model.coef_.tolist()))
-
-    return jsonify({
-        "mse": mse,
-        "r2_score": r2,
-        "coeficients": coeficients
-    }), 200
+def calculate_roc_curve(y_true, y_pred):
+    """Converte os valores para binário e calcula a curva ROC."""
+    threshold = np.mean(y_true)  # Ajuste do threshold correto
+    y_true_binary = [1 if val > threshold else 0 for val in y_true]
     
-def categorize(value):
-    """Categorização em intervalos."""
-    if value <= 10:
-        return 0
-    elif value <= 20:
-        return 1
-    elif value <= 30:
-        return 2
-    else:
-        return 3
+    fpr, tpr, _ = roc_curve(y_true_binary, y_pred)
+    roc_auc = auc(fpr, tpr)
+
+    return {
+        "fpr": fpr.tolist(),
+        "tpr": tpr.tolist(),
+        "roc_auc": roc_auc
+    }
+
+
+# Função para calcular a matriz de confusão
+def calculate_confusion_matrix(y_true, y_pred):
+    """Calcula a matriz de confusão convertendo valores contínuos para binários."""
+    threshold = np.mean(y_true)  # Usar média como limiar
+    y_true_binary = [1 if val > threshold else 0 for val in y_true]
+
+    cm = confusion_matrix(y_true_binary, y_pred)
+    return cm.tolist()
+
+
+@main.route('/player/<int:player_id>/regression', methods=['GET'])
+def player_regression(player_id):
+    """Realiza regressão linear para prever pontos, assistências e rebotes de um jogador."""
+    season = request.args.get('season', '2024-25')
     
-@main.route('/regression/linear/confusion_matrix', methods=['POST'])
-def linear_regression_confusion_matrix():
-    """
-    Gera a matriz de confusão para a regressão linear com categorias.
-    """
-    data = request.json  # Recebe os dados como [{"real": valor, "predicted": valor}]
-    if not data:
-        return jsonify({"error": "Nenhum dado recebido."}), 400
-
     try:
-        # Extrair valores reais e preditos e categorizá-los
-        real = [categorize(item["real"]) for item in data]
-        predicted = [categorize(item["predicted"]) for item in data]
+        game_logs = get_player_game_logs(player_id, season)
+        
+        if not game_logs:
+            return jsonify({"error": "Nenhum dado encontrado para o jogador."}), 404
 
-        # Construir a matriz de confusão
-        cm = confusion_matrix(real, predicted)
-        return jsonify({"confusion_matrix": cm.tolist()}), 200
-    except Exception as e:
-        return jsonify({"error": f"Erro ao calcular matriz de confusão: {str(e)}"}), 500
+        # Preparar os dados
+        X = [[log["Tempo de Permanencia do Jogador em Quadra"], log["Tentativas de Cestas de 3"], log["Turnovers"]] for log in game_logs]
+        y_points = [log["Pontos"] for log in game_logs]
+        y_rebounds = [log["Rebotes"] for log in game_logs]
+        y_assists = [log["Assistencias"] for log in game_logs]
 
+        # Dividir os dados em treinamento e teste
+        X_train, X_test, y_points_train, y_points_test = train_test_split(X, y_points, test_size=0.2, random_state=42)
+        X_train, X_test, y_rebounds_train, y_rebounds_test = train_test_split(X, y_rebounds, test_size=0.2, random_state=42)
+        X_train, X_test, y_assists_train, y_assists_test = train_test_split(X, y_assists, test_size=0.2, random_state=42)
 
+        # Treinamento do modelo de regressão linear
+        model_points = LinearRegression().fit(X_train, y_points_train)
+        model_rebounds = LinearRegression().fit(X_train, y_rebounds_train)
+        model_assists = LinearRegression().fit(X_train, y_assists_train)
 
-@main.route('/regression/linear/roc_curve', methods=['POST'])
-def linear_regression_roc_curve():
-    """
-    Gera os dados para a curva ROC.
-    Recebe os dados reais e as probabilidades preditas para calcular a curva ROC.
-    """
-    data = request.json  # Recebe os dados como [{"real": valor, "prob": probabilidade}]
-    if not data:
-        return jsonify({"error": "Nenhum dado recebido."}), 400
+        # Fazer previsões
+        y_points_pred = model_points.predict(X_test)
+        y_rebounds_pred = model_rebounds.predict(X_test)
+        y_assists_pred = model_assists.predict(X_test)
 
-    real = [item["real"] for item in data]
-    probs = [item["prob"] for item in data]
+        # Ajuste na conversão binária (usar média do conjunto de teste)
+        y_points_binary = [1 if pred > np.mean(y_points_test) else 0 for pred in y_points_pred]
+        y_rebounds_binary = [1 if pred > np.mean(y_rebounds_test) else 0 for pred in y_rebounds_pred]
+        y_assists_binary = [1 if pred > np.mean(y_assists_test) else 0 for pred in y_assists_pred]
 
-    try:
-        fpr, tpr, thresholds = roc_curve(real, probs)
-        roc_auc = auc(fpr, tpr)
-        return jsonify({
-            "fpr": fpr.tolist(),
-            "tpr": tpr.tolist(),
-            "thresholds": thresholds.tolist(),
-            "auc": roc_auc
-        }), 200
-    except Exception as e:
-        return jsonify({"error": f"Erro ao calcular curva ROC: {str(e)}"}), 500
+        # Calcular probabilidades
+        def calculate_probabilities(y_true, y_pred):
+            mean = np.mean(y_true)
+            median = np.median(y_true)
+            mode = stats.mode(y_true, keepdims=True)[0]
+            mode = mode[0] if len(mode) > 0 else np.nan  # Evita erro caso não exista moda
+            max_val = np.max(y_true)
+            min_val = np.min(y_true)
 
+            probabilidades = {
+                "acima_da_media": np.mean(y_pred > mean),
+                "abaixo_da_media": np.mean(y_pred < mean),
+                "acima_da_mediana": np.mean(y_pred > median),
+                "abaixo_da_mediana": np.mean(y_pred < median),
+                "acima_da_moda": np.mean(y_pred > mode) if not np.isnan(mode) else 0,
+                "abaixo_da_moda": np.mean(y_pred < mode) if not np.isnan(mode) else 0,
+                "acima_do_maximo": np.mean(y_pred > max_val),
+                "abaixo_do_minimo": np.mean(y_pred < min_val)
+            }
+            return probabilidades
 
-@main.route('/regression/linear/coefficients', methods=['GET'])
-def linear_regression_coefficients():
-    """
-    Retorna os coeficientes do modelo de regressão linear treinado.
-    """
-    try:
-        # Certifique-se de que o modelo foi treinado previamente.
-        if not linear_model:
-            return jsonify({"error": "Modelo de regressão linear ainda não foi treinado."}), 400
+        points_probabilities = calculate_probabilities(y_points_test, y_points_pred)
+        rebounds_probabilities = calculate_probabilities(y_rebounds_test, y_rebounds_pred)
+        assists_probabilities = calculate_probabilities(y_assists_test, y_assists_pred)
 
-        coefficients = {
-            feature: coef for feature, coef in zip(["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"], linear_model.coef_)
+        points_confusion_matrix = calculate_confusion_matrix(y_points_test, y_points_binary)
+        rebounds_confusion_matrix = calculate_confusion_matrix(y_rebounds_test, y_rebounds_binary)
+        assists_confusion_matrix = calculate_confusion_matrix(y_assists_test, y_assists_binary)
+
+        points_roc_curve = calculate_roc_curve(y_points_test, y_points_pred)
+        rebounds_roc_curve = calculate_roc_curve(y_rebounds_test, y_rebounds_pred)
+        assists_roc_curve = calculate_roc_curve(y_assists_test, y_assists_pred)
+
+        result = {
+            "player_id": player_id,
+            "points_probabilities": points_probabilities,
+            "rebounds_probabilities": rebounds_probabilities,
+            "assists_probabilities": assists_probabilities,
+            "points_confusion_matrix": points_confusion_matrix,
+            "rebounds_confusion_matrix": rebounds_confusion_matrix,
+            "assists_confusion_matrix": assists_confusion_matrix,
+            "points_roc_curve": points_roc_curve,
+            "rebounds_roc_curve": rebounds_roc_curve,
+            "assists_roc_curve": assists_roc_curve
         }
-        return jsonify({"coefficients": coefficients}), 200
+
+        return jsonify(result), 200
+
     except Exception as e:
-        return jsonify({"error": f"Erro ao retornar coeficientes: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
 
-logistic_model = None
     
-@main.route('/regression/logistic/train', methods=['POST'])
-def train_logistic_regression():
-    global logistic_model
-    data = request.json
-    df = pd.DataFrame(data)
 
-    X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
-    y = df["Pontuacao_Alta"]
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-    logistic_model = LogisticRegression()
-    logistic_model.fit(X_train, y_train)
-
-    return jsonify({"message": "Modelo treinado com sucesso!"}), 200
-
-@main.route('/regression/logistic/predict', methods=['POST'])
-def predict_logistic_regression():
-    global logistic_model
-    if not logistic_model:
-        return jsonify({"error": "Modelo ainda não foi treinado."}), 400
-
-    data = request.json
-    df = pd.DataFrame(data)
-    X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
-    predictions = logistic_model.predict(X).tolist()
-
-    return jsonify({"predictions": predictions}), 200
+@main.route('/player/<int:player_id>/logistic_regression', methods=['GET'])
+def player_logistic_regression(player_id):
+    """Realiza regressão logística para prever pontos, assistências e rebotes de um jogador."""
+    season = request.args.get('season', '2024-25')
     
-@main.route('/regression/logistic/roc_curve', methods=['POST'])
-def logistic_regression_roc_curve():
-    """
-    Gera os dados para a curva ROC da regressão logística.
-    """
-    data = request.json  # Recebe os dados como [{"real": valor, "prob": probabilidade}]
-    if not data:
-        return jsonify({"error": "Nenhum dado recebido."}), 400
-
-    real = [item["real"] for item in data]
-    probs = [item["prob"] for item in data]
-
     try:
-        fpr, tpr, thresholds = roc_curve(real, probs)
-        roc_auc = auc(fpr, tpr)
-        return jsonify({
-            "fpr": fpr.tolist(),
-            "tpr": tpr.tolist(),
-            "thresholds": thresholds.tolist(),
-            "auc": roc_auc
-        }), 200
-    except Exception as e:
-        return jsonify({"error": f"Erro ao calcular curva ROC: {str(e)}"}), 500
+        game_logs = get_player_game_logs(player_id, season)
+        
+        if not game_logs:
+            return jsonify({"error": "Nenhum dado encontrado para o jogador."}), 404
 
-@main.route('/gamlss/predict', methods=['POST'])
-def gamlss_predict():
-    data = request.json
-    if not data:
-        return jsonify({"error": "Nenhum dado fornecido."}), 400
+        # Preparar os dados
+        X = [[log["Tempo de Permanencia do Jogador em Quadra"], log["Tentativas de Cestas de 3"], log["Turnovers"]] for log in game_logs]
+        y_points = [1 if log["Pontos"] > np.mean([log["Pontos"] for log in game_logs]) else 0 for log in game_logs]
+        y_rebounds = [1 if log["Rebotes"] > np.mean([log["Rebotes"] for log in game_logs]) else 0 for log in game_logs]
+        y_assists = [1 if log["Assistencias"] > np.mean([log["Assistencias"] for log in game_logs]) else 0 for log in game_logs]
 
-    df = pd.DataFrame(data)
-    required_columns = ["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV", "Pontos", "Assistencias", "Rebotes"]
-    if not all(col in df.columns for col in required_columns):
-        return jsonify({"error": f"Os dados devem conter as colunas: {required_columns}"}), 400
+        # Dividir os dados em treinamento e teste
+        X_train, X_test, y_points_train, y_points_test = train_test_split(X, y_points, test_size=0.2, random_state=42)
+        _, _, y_rebounds_train, y_rebounds_test = train_test_split(X, y_rebounds, test_size=0.2, random_state=42)
+        _, _, y_assists_train, y_assists_test = train_test_split(X, y_assists, test_size=0.2, random_state=42)
 
-    X = df[["Tempo de Permanencia do Jogador em Quadra", "FGA", "TOV"]]
-    y_points = df["Pontos"]
-    y_assists = df["Assistencias"]
-    y_rebounds = df["Rebotes"]
+        # Treinar o modelo de regressão logística
+        model_points = LogisticRegression().fit(X_train, y_points_train)
+        model_rebounds = LogisticRegression().fit(X_train, y_rebounds_train)
+        model_assists = LogisticRegression().fit(X_train, y_assists_train)
 
-    # Normalizar os dados
-    from sklearn.preprocessing import StandardScaler
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+        # Fazer previsões
+        y_points_pred = model_points.predict(X_test)
+        y_rebounds_pred = model_rebounds.predict(X_test)
+        y_assists_pred = model_assists.predict(X_test)
 
-    # Verificar se há pelo menos 2 amostras
-    if len(X) < 2:
-        return jsonify({"error": "Número insuficiente de dados para treinar e testar o modelo. Forneça pelo menos 2 registros."}), 400
+        # Calcular probabilidades
+        def calculate_probabilities(y_true, y_pred):
+            accuracy = accuracy_score(y_true, y_pred)
+            confusion = confusion_matrix(y_true, y_pred)
+            fpr, tpr, _ = roc_curve(y_true, y_pred)
+            roc_auc = auc(fpr, tpr)
 
-    # Dividir os dados apenas se houver amostras suficientes
-    if len(X) > 2:
-        X_train, X_test, y_points_train, y_points_test = train_test_split(X_scaled, y_points, test_size=0.2, random_state=42)
-        _, _, y_assists_train, y_assists_test = train_test_split(X_scaled, y_assists, test_size=0.2, random_state=42)
-        _, _, y_rebounds_train, y_rebounds_test = train_test_split(X_scaled, y_rebounds, test_size=0.2, random_state=42)
-    else:
-        X_train, y_points_train, y_assists_train, y_rebounds_train = X_scaled, y_points, y_assists, y_rebounds
+            probabilities = {
+                "accuracy": accuracy,
+                "confusion_matrix": confusion.tolist(),
+                "roc_auc": roc_auc
+            }
+            return probabilities
 
-    gam_points = PoissonGAM(s(0, n_splines=5) + s(1, n_splines=5) + s(2, n_splines=5)).fit(X_train, y_points_train)
-    gam_assists = LinearGAM(s(0, n_splines=5) + s(1, n_splines=5) + s(2, n_splines=5)).fit(X_train, y_assists_train)
-    gam_rebounds = LinearGAM(s(0, n_splines=5) + s(1, n_splines=5) + s(2, n_splines=5)).fit(X_train, y_rebounds_train)
+        points_probabilities = calculate_probabilities(y_points_test, y_points_pred)
+        rebounds_probabilities = calculate_probabilities(y_rebounds_test, y_rebounds_pred)
+        assists_probabilities = calculate_probabilities(y_assists_test, y_assists_pred)
 
-    # Prever os valores para o próximo jogo
-    next_game = scaler.transform(X.iloc[-1:])
-    prediction_points = max(0, gam_points.predict(next_game)[0])
-    prediction_assists = max(0, gam_assists.predict(next_game)[0])
-    prediction_rebounds = max(0, gam_rebounds.predict(next_game)[0])
-
-    return jsonify({
-        "next_game_prediction": {
-            "points": round(prediction_points, 2),
-            "assists": round(prediction_assists, 2),
-            "rebounds": round(prediction_rebounds, 2)
-        },
-        "model_details": {
-            "points": {"scores": gam_points.statistics_["pseudo_r2"]},
-            "assists": {"scores": gam_assists.statistics_["pseudo_r2"]},
-            "rebounds": {"scores": gam_rebounds.statistics_["pseudo_r2"]}
+        result = {
+            "player_id": player_id,
+            "points_probabilities": points_probabilities,
+            "rebounds_probabilities": rebounds_probabilities,
+            "assists_probabilities": assists_probabilities
         }
-    }), 200
 
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
+    
+
+@main.route('/player/<int:player_id>/gam_predictions', methods=['GET'])
+def player_gam_predictions(player_id):
+    """Realiza previsões usando PoissonGAM e LinearGAM para pontos, assistências e rebotes de um jogador."""
+    season = request.args.get('season', '2024-25')
+    
+    try:
+        game_logs = get_player_game_logs(player_id, season)
+        
+        if not game_logs:
+            return jsonify({"error": "Nenhum dado encontrado para o jogador."}), 404
+
+        # Preparar os dados
+        X = np.array([[log["Tempo de Permanencia do Jogador em Quadra"], log["Tentativas de Cestas de 3"], log["Turnovers"]] for log in game_logs])
+        y_points = np.array([log["Pontos"] for log in game_logs])
+        y_rebounds = np.array([log["Rebotes"] for log in game_logs])
+        y_assists = np.array([log["Assistencias"] for log in game_logs])
+
+        # Dividir os dados em treinamento e teste
+        X_train, X_test, y_points_train, y_points_test = train_test_split(X, y_points, test_size=0.2, random_state=42)
+        _, _, y_rebounds_train, y_rebounds_test = train_test_split(X, y_rebounds, test_size=0.2, random_state=42)
+        _, _, y_assists_train, y_assists_test = train_test_split(X, y_assists, test_size=0.2, random_state=42)
+
+        # Treinar os modelos PoissonGAM e LinearGAM
+        gam_points = PoissonGAM(s(0) + s(1) + s(2)).fit(X_train, y_points_train)
+        gam_rebounds = LinearGAM(s(0) + s(1) + s(2)).fit(X_train, y_rebounds_train)
+        gam_assists = LinearGAM(s(0) + s(1) + s(2)).fit(X_train, y_assists_train)
+
+        # Fazer previsões
+        y_points_pred = gam_points.predict(X_test)
+        y_rebounds_pred = gam_rebounds.predict(X_test)
+        y_assists_pred = gam_assists.predict(X_test)
+
+        # Calcular probabilidades
+        def calculate_probabilities(y_true, y_pred):
+            mean = np.mean(y_true)
+            median = np.median(y_true)
+            mode = stats.mode(y_true, keepdims=True)[0][0]
+            max_val = np.max(y_true)
+            min_val = np.min(y_true)
+
+            probabilidades = {
+                "acima_da_media": np.mean(y_pred > mean),
+                "abaixo_da_media": np.mean(y_pred < mean),
+                "acima_da_mediana": np.mean(y_pred > median),
+                "abaixo_da_mediana": np.mean(y_pred < median),
+                "acima_da_moda": np.mean(y_pred > mode),
+                "abaixo_da_moda": np.mean(y_pred < mode),
+                "acima_do_maximo": np.mean(y_pred > max_val),
+                "abaixo_do_minimo": np.mean(y_pred < min_val)
+            }
+            return probabilidades
+
+        points_probabilities = calculate_probabilities(y_points_test, y_points_pred)
+        rebounds_probabilities = calculate_probabilities(y_rebounds_test, y_rebounds_pred)
+        assists_probabilities = calculate_probabilities(y_assists_test, y_assists_pred)
+
+        # Calcular erro quadrático médio e R² para as previsões
+        points_mse = mean_squared_error(y_points_test, y_points_pred)
+        rebounds_mse = mean_squared_error(y_rebounds_test, y_rebounds_pred)
+        assists_mse = mean_squared_error(y_assists_test, y_assists_pred)
+
+        points_r2 = r2_score(y_points_test, y_points_pred)
+        rebounds_r2 = r2_score(y_rebounds_test, y_rebounds_pred)
+        assists_r2 = r2_score(y_assists_test, y_assists_pred)
+
+        result = {
+            "player_id": player_id,
+            "points_probabilities": points_probabilities,
+            "rebounds_probabilities": rebounds_probabilities,
+            "assists_probabilities": assists_probabilities,
+            "points_mse": points_mse,
+            "rebounds_mse": rebounds_mse,
+            "assists_mse": assists_mse,
+            "points_r2": points_r2,
+            "rebounds_r2": rebounds_r2,
+            "assists_r2": assists_r2
+        }
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Erro ao processar os dados: {str(e)}"}), 500
 
 

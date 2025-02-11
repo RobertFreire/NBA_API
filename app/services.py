@@ -747,6 +747,7 @@ def get_player_game_logs(player_id, season="2024-25"):
             "FG3A": "Tentativas de Cestas de 3",
             "FG3M": "Cestas de 3 PTS Marcados",
             "MIN": "Tempo de Permanencia do Jogador em Quadra",
+            'TOV': "Turnovers",
             "GAME_ID": "Game_ID"
         })
 
